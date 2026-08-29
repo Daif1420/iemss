@@ -126,10 +126,10 @@ router.post('/import-master', requireAuth, requireUploader, async (req, res) => 
         await db.query(
           `INSERT INTO employees (id, emp_num, name, education, residence, company, shift, department, password_hash, role, must_change_password)
            SELECT id, emp_num, name, education, residence, company, shift, department, password_hash, 'employee', 0
-           FROM unnest($1::int[], $2::text[], $3::text[], $4::text[], $5::text[], $6::text[], $7::text[], $8::text[], $9::text[])
+           FROM unnest($1::int[], $2::int[], $3::text[], $4::text[], $5::text[], $6::text[], $7::text[], $8::text[], $9::text[])
              AS t(id, emp_num, name, education, residence, company, shift, department, password_hash)`,
           [
-            batch.map(e => e.id), batch.map(e => String(e.emp_num)), batch.map(e => e.name), batch.map(e => e.education),
+            batch.map(e => e.id), batch.map(e => Number(e.emp_num)), batch.map(e => e.name), batch.map(e => e.education),
             batch.map(e => e.residence), batch.map(e => e.company), batch.map(e => e.shift), batch.map(e => e.department),
             batch.map(e => e.hash),
           ]
@@ -142,11 +142,11 @@ router.post('/import-master', requireAuth, requireUploader, async (req, res) => 
         await db.query(
           `UPDATE employees AS e SET emp_num = t.emp_num, name = t.name, education = t.education, residence = t.residence,
              company = t.company, shift = t.shift, department = t.department
-           FROM unnest($1::int[], $2::text[], $3::text[], $4::text[], $5::text[], $6::text[], $7::text[], $8::text[])
+           FROM unnest($1::int[], $2::int[], $3::text[], $4::text[], $5::text[], $6::text[], $7::text[], $8::text[])
              AS t(id, emp_num, name, education, residence, company, shift, department)
            WHERE e.id = t.id AND e.role = 'employee'`,
           [
-            batch.map(e => e.id), batch.map(e => String(e.emp_num)), batch.map(e => e.name), batch.map(e => e.education),
+            batch.map(e => e.id), batch.map(e => Number(e.emp_num)), batch.map(e => e.name), batch.map(e => e.education),
             batch.map(e => e.residence), batch.map(e => e.company), batch.map(e => e.shift), batch.map(e => e.department),
           ]
         );
