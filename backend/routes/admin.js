@@ -125,7 +125,7 @@ router.post('/import-master', requireAuth, requireUploader, async (req, res) => 
         if (!batch.length) continue;
         await db.query(
           `INSERT INTO employees (id, emp_num, name, education, residence, company, shift, department, password_hash, role, must_change_password)
-           SELECT id, emp_num, name, education, residence, company, shift, department, password_hash, 'employee', 0
+           SELECT id, emp_num, name, education, residence, company, shift, department, password_hash, 'employee', false
            FROM unnest($1::int[], $2::int[], $3::text[], $4::text[], $5::text[], $6::text[], $7::text[], $8::text[], $9::text[])
              AS t(id, emp_num, name, education, residence, company, shift, department, password_hash)`,
           [
