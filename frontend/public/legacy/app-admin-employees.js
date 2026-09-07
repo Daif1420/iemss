@@ -15,6 +15,45 @@ async function api(path, opts = {}) {
   if (!res.ok) throw new Error(data.error || 'حدث خطأ');
   return data;
 }
+
+// ---- Protected primary-admin self account settings ----
+const myAccountBtn = $('my-account-btn');
+const myAccountModal = $('my-account-modal');
+const myAccountError = $('my-account-error');
+function openMyAccount() {
+  if (!myAccountModal) return;
+  $('my-name').value = user.name || '';
+  $('my-current-password').value = '';
+  $('my-new-password').value = '';
+  myAccountError.textContent = '';
+  myAccountError.className = 'modal-error';
+  myAccountModal.classList.add('open');
+}
+function closeMyAccount() { if (myAccountModal) myAccountModal.classList.remove('open'); }
+if (myAccountBtn) myAccountBtn.addEventListener('click', openMyAccount);
+if ($('my-account-cancel')) $('my-account-cancel').addEventListener('click', closeMyAccount);
+if (myAccountModal) myAccountModal.addEventListener('click', e => { if (e.target === myAccountModal) closeMyAccount(); });
+if ($('my-account-save')) $('my-account-save').addEventListener('click', async () => {
+  const name = $('my-name').value.trim();
+  const currentPassword = $('my-current-password').value;
+  const newPassword = $('my-new-password').value;
+  myAccountError.textContent = '';
+  try {
+    const body = { name };
+    if (newPassword) { body.currentPassword = currentPassword; body.newPassword = newPassword; }
+    const data = await api('/api/admin/me/profile', { method: 'PATCH', body: JSON.stringify(body) });
+    Object.assign(user, data.user || {});
+    sessionStorage.setItem('iems_user', JSON.stringify(user));
+    $('chip-name').textContent = user.name;
+    $('chip-avatar').textContent = (user.name || '?').trim()[0] || '?';
+    closeMyAccount();
+    showResult('تم تحديث حسابك', 'تم حفظ الاسم وكلمة المرور بنجاح، وستظل البيانات محفوظة بعد أي Deploy.');
+  } catch (e) {
+    myAccountError.textContent = e.message;
+    myAccountError.className = 'modal-error error';
+  }
+});
+
 function escapeHtml(v) { return String(v ?? '').replace(/[&<>'"]/g, ch => ({'&':'&amp;','<':'&lt;','>':'&gt;',"'":'&#39;','"':'&quot;'}[ch])); }
 // Target & performance figures are always shown as whole numbers (no decimals).
 function fmtNumber(v) { return Math.round(Number(v || 0)).toLocaleString('en-US'); }
@@ -259,7 +298,7 @@ $('emp-table-body').addEventListener('change', async (e) => {
     await api(`/api/admin/employee/${encodeURIComponent(id)}/role`, { method: 'PATCH', body: JSON.stringify({ role: sel.value }) });
     if (emp) emp.role = sel.value;
     sel.className = `role-select role-${sel.value}`;
-    $('emp-total').textContent = allEmployees.filter(e2 => (e2.role || 'employee') === 'employee').length;
+    $('emp-total').textContent = allEmployees.filter(e2 => (e2.role || 'employee') === 'employee' && (e2.status || 'active') === 'active').length;
   } catch (err) {
     sel.value = prevRole;
     showResult('خطأ', err.message);

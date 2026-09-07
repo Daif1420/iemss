@@ -55,7 +55,6 @@ router.post('/import-master', requireAuth, requireUploader, async (req, res) => 
     if (filename && !/\.xlsx$/i.test(filename)) {
       return res.status(400).json({ error: 'ارفع ملف Excel بصيغة .xlsx فقط.' });
     }
-
     const base64 = data.includes(',') ? data.split(',').pop() : data;
     const buffer = Buffer.from(base64, 'base64');
     if (!buffer.length) return res.status(400).json({ error: 'ملف Excel فارغ أو غير صالح.' });
@@ -63,6 +62,33 @@ router.post('/import-master', requireAuth, requireUploader, async (req, res) => 
 
     const parsed = parseMasterWorkbook(buffer);
     const employees = parsed.employees;
+
+    // Payroll cycle is determined automatically from the Master dates: 21st
+    // through the 20th of the following month. Store the cycle start date.
+    const importedDates = [];
+    for (const emp of employees) {
+      for (const stage of (emp.stages || [])) {
+        for (const date of Object.keys(stage.daily || {})) {
+          if (/^\d{4}-\d{2}-\d{2}$/.test(date)) importedDates.push(date);
+        }
+      }
+    }
+    if (!importedDates.length) {
+      return res.status(400).json({ error: 'لم يتم العثور على تواريخ يومية داخل ملف الـ Master.' });
+    }
+    const uniqueCycles = new Set(importedDates.map(date => {
+      const d = new Date(`${date}T00:00:00Z`);
+      const y = d.getUTCFullYear();
+      const m = d.getUTCMonth();
+      const day = d.getUTCDate();
+      const cycleYear = day >= 21 ? y : (m === 0 ? y - 1 : y);
+      const cycleMonth = day >= 21 ? m : (m === 0 ? 11 : m - 1);
+      return `${cycleYear}-${String(cycleMonth + 1).padStart(2, '0')}-21`;
+    }));
+    if (uniqueCycles.size > 1) {
+      return res.status(400).json({ error: 'ملف الـ Master يحتوي على تواريخ تنتمي لأكثر من دورة. يجب أن تكون كل التواريخ داخل دورة واحدة من 21 إلى 20.' });
+    }
+    const monthStart = [...uniqueCycles][0];
 
     // Bulk-insert/update helper: splits `rows` into chunks and issues ONE
     // round-trip per chunk via `unnest(...)` instead of one round-trip per row.
@@ -88,14 +114,22 @@ router.post('/import-master', requireAuth, requireUploader, async (req, res) => 
 
       // 1) Resolve every row against the current employees table in ONE query
       // instead of one SELECT per row.
-      const allEmployeesForLookup = await db.prepare('SELECT id, name, role FROM employees').all();
+      const allEmployeesForLookup = await db.prepare('SELECT id, name, role, shift, target_shift FROM employees').all();
       const byId = new Map(allEmployeesForLookup.map(e => [e.id, e]));
       const byName = new Map();
       for (const e of allEmployeesForLookup) if (!byName.has(e.name)) byName.set(e.name, e);
 
-      const toInsert = []; // {id, emp_num, name, education, residence, company, shift, department, hash}
-      const toUpdate = []; // {id, emp_num, name, education, residence, company, shift, department}
+      const toInsert = []; // {id, emp_num, name, education, residence, company, shift, target_shift, department, hash}
+      const toUpdate = []; // {id, emp_num, name, education, residence, company, shift, target_shift, department}
       const validRows = []; // rows that will get daily/summary data written
+      const promotedFromOther = new Set();
+      const shiftProfilesToUpsert = [];
+      const PRIMARY_SHIFTS = new Set(['A', 'B', 'C', 'D']);
+      const shiftRank = { A: 1, B: 2, C: 3, D: 4 };
+      const canonicalShift = value => {
+        const v = String(value || '').trim().toUpperCase();
+        return PRIMARY_SHIFTS.has(v) ? v : 'Other';
+      };
 
       for (const emp of rows) {
         if (!emp.id || emp.id === 0 || !emp.name) { skipped++; continue; }
@@ -104,33 +138,89 @@ router.post('/import-master', requireAuth, requireUploader, async (req, res) => 
         if (existing && emp.generatedId) emp.id = existing.id;
         if (existing && existing.role !== 'employee') { skipped++; continue; }
 
+        const incomingShift = canonicalShift(emp.shift);
+        // Keep a complete copy for every shift. This is what allows an employee
+        // such as Michael to have both Shift Other and Shift B details without
+        // collapsing one shift into the other in stage_daily/employee_summary.
+        const resolvedEmployeeId = existing && emp.generatedId ? existing.id : emp.id;
+        shiftProfilesToUpsert.push({ employeeId: resolvedEmployeeId, shift: incomingShift, profile: emp });
+        const existingTarget = existing ? canonicalShift(existing.target_shift || existing.shift) : null;
+        let targetShift = existingTarget || incomingShift;
+        let useRow = true;
+        let profileShift = incomingShift;
+
+        if (existing && incomingShift === 'Other' && PRIMARY_SHIFTS.has(existingTarget)) {
+          // Other is only a secondary copy. Never let it replace the employee's
+          // real A/B/C/D shift, profile data, KPIs, or daily records.
+          useRow = false;
+          targetShift = existingTarget;
+          skipped++;
+        } else if (incomingShift !== 'Other' && PRIMARY_SHIFTS.has(incomingShift)) {
+          if (!existing) {
+            targetShift = incomingShift;
+          } else if (!PRIMARY_SHIFTS.has(existingTarget)) {
+            targetShift = incomingShift;
+            promotedFromOther.add(emp.id);
+          } else if (incomingShift !== existingTarget) {
+            // If the same employee is present in two primary shifts, keep the
+            // deterministic highest-priority primary shift: A > B > C > D.
+            if (shiftRank[incomingShift] < shiftRank[existingTarget]) {
+              targetShift = incomingShift;
+              promotedFromOther.add(emp.id);
+            } else {
+              useRow = false;
+              targetShift = existingTarget;
+              skipped++;
+            }
+          }
+          profileShift = targetShift;
+        } else {
+          targetShift = existing ? existingTarget : 'Other';
+          profileShift = targetShift;
+        }
+
+        if (!useRow) {
+          if (existing) masterIds.add(existing.id);
+          continue;
+        }
+
+        emp.shift = profileShift;
+        emp.target_shift = targetShift;
         masterIds.add(emp.id);
         validRows.push(emp);
 
         if (!existing) {
           const hash = bcrypt.hashSync(DEFAULT_PASSWORD, 10);
-          toInsert.push({ id: emp.id, emp_num: emp.emp_num || emp.id, name: emp.name, education: emp.education, residence: emp.residence, company: emp.company, shift: emp.shift, department: emp.department, hash });
+          toInsert.push({ id: emp.id, emp_num: emp.emp_num || emp.id, name: emp.name, education: emp.education, residence: emp.residence, company: emp.company, shift: profileShift, target_shift: targetShift, department: emp.department, hash });
           created++;
           createdEmployees.push({ id: emp.id, name: emp.name });
           newCredentials.push({ id: emp.id, name: emp.name, password: DEFAULT_PASSWORD });
         } else {
-          toUpdate.push({ id: emp.id, emp_num: emp.emp_num || emp.id, name: emp.name, education: emp.education, residence: emp.residence, company: emp.company, shift: emp.shift, department: emp.department });
+          toUpdate.push({ id: emp.id, emp_num: emp.emp_num || emp.id, name: emp.name, education: emp.education, residence: emp.residence, company: emp.company, shift: profileShift, target_shift: targetShift, department: emp.department });
           updated++;
           updatedEmployees.push({ id: emp.id, name: emp.name });
         }
+      }
+
+      // When an employee is promoted from Other to a real A/B/C/D shift, remove
+      // the secondary copy before writing the primary data. This prevents old
+      // Other rows from surviving a later primary-shift import.
+      if (promotedFromOther.size) {
+        await db.query('DELETE FROM stage_daily WHERE employee_id = ANY($1::int[])', [[...promotedFromOther]]);
+        await db.query('DELETE FROM employee_summary WHERE employee_id = ANY($1::int[])', [[...promotedFromOther]]);
       }
 
       // 2) Bulk insert new employees.
       for (const batch of chunks(toInsert, CHUNK)) {
         if (!batch.length) continue;
         await db.query(
-          `INSERT INTO employees (id, emp_num, name, education, residence, company, shift, department, password_hash, role, must_change_password)
-           SELECT id, emp_num, name, education, residence, company, shift, department, password_hash, 'employee', false
-           FROM unnest($1::int[], $2::int[], $3::text[], $4::text[], $5::text[], $6::text[], $7::text[], $8::text[], $9::text[])
-             AS t(id, emp_num, name, education, residence, company, shift, department, password_hash)`,
+          `INSERT INTO employees (id, emp_num, name, education, residence, company, shift, target_shift, department, password_hash, role, must_change_password)
+           SELECT id, emp_num, name, education, residence, company, shift, target_shift, department, password_hash, 'employee', false
+           FROM unnest($1::int[], $2::int[], $3::text[], $4::text[], $5::text[], $6::text[], $7::text[], $8::text[], $9::text[], $10::text[])
+             AS t(id, emp_num, name, education, residence, company, shift, target_shift, department, password_hash)`,
           [
             batch.map(e => e.id), batch.map(e => Number(e.emp_num)), batch.map(e => e.name), batch.map(e => e.education),
-            batch.map(e => e.residence), batch.map(e => e.company), batch.map(e => e.shift), batch.map(e => e.department),
+            batch.map(e => e.residence), batch.map(e => e.company), batch.map(e => e.shift), batch.map(e => e.target_shift), batch.map(e => e.department),
             batch.map(e => e.hash),
           ]
         );
@@ -141,21 +231,42 @@ router.post('/import-master', requireAuth, requireUploader, async (req, res) => 
         if (!batch.length) continue;
         await db.query(
           `UPDATE employees AS e SET emp_num = t.emp_num, name = t.name, education = t.education, residence = t.residence,
-             company = t.company, shift = t.shift, department = t.department
-           FROM unnest($1::int[], $2::int[], $3::text[], $4::text[], $5::text[], $6::text[], $7::text[], $8::text[])
-             AS t(id, emp_num, name, education, residence, company, shift, department)
+             company = t.company, shift = t.shift, target_shift = t.target_shift, department = t.department
+           FROM unnest($1::int[], $2::int[], $3::text[], $4::text[], $5::text[], $6::text[], $7::text[], $8::text[], $9::text[])
+             AS t(id, emp_num, name, education, residence, company, shift, target_shift, department)
            WHERE e.id = t.id AND e.role = 'employee'`,
           [
             batch.map(e => e.id), batch.map(e => Number(e.emp_num)), batch.map(e => e.name), batch.map(e => e.education),
-            batch.map(e => e.residence), batch.map(e => e.company), batch.map(e => e.shift), batch.map(e => e.department),
+            batch.map(e => e.residence), batch.map(e => e.company), batch.map(e => e.shift), batch.map(e => e.target_shift), batch.map(e => e.department),
           ]
         );
       }
 
-      // 4) Bulk delete existing daily rows for a full (non-merge) re-import,
-      // in ONE statement instead of one DELETE per employee.
+      // Preserve every incoming shift snapshot after the canonical employee
+      // rows exist (important for newly created employees because of the FK).
+      for (const batch of chunks(shiftProfilesToUpsert, CHUNK)) {
+        if (!batch.length) continue;
+        await db.query(
+          `INSERT INTO employee_shift_profiles (employee_id, shift, profile_json, updated_at)
+           SELECT employee_id, shift, profile_json::jsonb, CURRENT_TIMESTAMP
+           FROM unnest($1::int[], $2::text[], $3::text[])
+             AS t(employee_id, shift, profile_json)
+           ON CONFLICT (employee_id, shift) DO UPDATE SET profile_json = EXCLUDED.profile_json, updated_at = CURRENT_TIMESTAMP`,
+          [batch.map(x => x.employeeId), batch.map(x => x.shift), batch.map(x => JSON.stringify(x.profile))]
+        );
+      }
+
+      // 4) For a normal Master re-import, replace ONLY the imported payroll
+      // cycle's daily rows. Never delete older cycles (21->20 history).
       if (!merge && validRows.length) {
-        await db.query('DELETE FROM stage_daily WHERE employee_id = ANY($1::int[])', [validRows.map(e => e.id)]);
+        const cycleEnd = new Date(`${monthStart}T00:00:00Z`);
+        cycleEnd.setUTCMonth(cycleEnd.getUTCMonth() + 1);
+        cycleEnd.setUTCDate(cycleEnd.getUTCDate() - 1); // 20th of next month
+        const cycleEndIso = cycleEnd.toISOString().slice(0, 10);
+        await db.query(
+          'DELETE FROM stage_daily WHERE employee_id = ANY($1::int[]) AND entry_date BETWEEN $2::date AND $3::date',
+          [validRows.map(e => e.id), monthStart, cycleEndIso]
+        );
       }
 
       // 5) Flatten every employee/stage/date cell into flat arrays and bulk
@@ -220,6 +331,27 @@ router.post('/import-master', requireAuth, requireUploader, async (req, res) => 
         );
       }
 
+
+      // 7) Preserve the Employee Summary as a monthly snapshot. The legacy
+      // employee_summary table remains the latest/current snapshot for older
+      // screens, while this table keeps every imported month separately.
+      for (const batch of chunks(validRows, CHUNK)) {
+        if (!batch.length) continue;
+        const arrs = [batch.map(e => e.id), ...sCols.map(c => c === 'bonus_tier'
+          ? batch.map(e => (e.summary[c] === null || e.summary[c] === undefined || e.summary[c] === '') ? null : String(e.summary[c]))
+          : batch.map(e => toSummaryNumber(e.summary[c])) )];
+        const unnestTypes = ['int', ...sCols.map(c => c === 'bonus_tier' ? 'text' : 'float8')];
+        const unnestSql = arrs.map((_, i) => `$${i + 1}::${unnestTypes[i]}[]`).join(', ');
+        await db.query(
+          `INSERT INTO employee_monthly_summary (employee_id, month_start, ${sCols.join(', ')})
+           SELECT employee_id, $${arrs.length + 1}::date, ${sCols.join(', ')}
+           FROM unnest(${unnestSql}) AS t(employee_id, ${sCols.join(', ')})
+           ON CONFLICT (employee_id, month_start) DO UPDATE SET
+             ${sCols.map(c => `${c} = excluded.${c}`).join(', ')}, updated_at = CURRENT_TIMESTAMP`,
+          [...arrs, monthStart]
+        );
+      }
+
       // Match supervisor-target rows. In a multi-file import we merge blocks
       // from all files instead of deleting the rows uploaded by the previous file.
       let supervisorLinked = 0;
@@ -227,7 +359,12 @@ router.post('/import-master', requireAuth, requireUploader, async (req, res) => 
       const allEmployeesNow = await db.prepare("SELECT id, name FROM employees WHERE role = 'employee'").all();
       const nameIndex = new Map();
       for (const e of allEmployeesNow) nameIndex.set(normalizeArabicName(e.name), e.id);
-      if (!merge) await db.query('DELETE FROM supervisor_targets');
+      if (!merge) {
+        const cycleEnd = new Date(`${monthStart}T00:00:00Z`);
+        cycleEnd.setUTCMonth(cycleEnd.getUTCMonth() + 1);
+        cycleEnd.setUTCDate(cycleEnd.getUTCDate() - 1);
+        await db.query('DELETE FROM supervisor_targets WHERE entry_date BETWEEN $1::date AND $2::date', [monthStart, cycleEnd.toISOString().slice(0, 10)]);
+      }
 
       const supervisorRecs = parsed.supervisorTargets || [];
       const tEmp = [], tName = [], tSection = [], tDate = [], tDaily = [], tMonthly = [], tMetrics = [];
@@ -316,6 +453,18 @@ router.post('/import-master', requireAuth, requireUploader, async (req, res) => 
 
     }
 
+    // Persist a durable import history entry in PostgreSQL. This is intentionally
+    // separate from localStorage so it survives browser changes and Vercel deploys.
+    await db.prepare(`
+      INSERT INTO import_history
+        (imported_by, imported_by_name, filename, month_start, updated_count, created_count, daily_count, skipped_count, supervisor_linked, supervisor_unmatched, status, details_json)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'success', ?::jsonb)
+    `).run(
+      req.user.id, req.user.name || null, filename || 'Master.xlsx', monthStart, result.updated, result.created,
+      result.daily, result.skipped, result.supervisorLinked, result.supervisorUnmatched,
+      JSON.stringify({ updatedEmployees: result.updatedEmployees, createdEmployees: result.createdEmployees })
+    );
+
     // New employee passwords are intentionally returned once to the admin so they can be distributed.
     res.json({
       ok: true,
@@ -331,6 +480,60 @@ router.post('/import-master', requireAuth, requireUploader, async (req, res) => 
   }
 });
 
+// Durable import history. Available to full admins and supervisors who can import.
+router.get('/import-history', requireAuth, requireSupervisor, async (req, res) => {
+  const rows = await db.prepare(`
+    SELECT id, imported_by, imported_by_name, filename, month_start, updated_count, created_count, daily_count, skipped_count,
+           supervisor_linked, supervisor_unmatched, status, details_json, created_at
+    FROM import_history
+    ORDER BY created_at DESC, id DESC
+    LIMIT 100
+  `).all();
+  res.json({ history: rows.map(r => ({
+    ...r,
+    details: r.details_json || null,
+  })) });
+});
+
+// Update the currently authenticated user's own name/password. This is the
+// safe self-service path for the protected primary system administrator.
+// It cannot change id, role, status, or any other account's data.
+router.patch('/me/profile', requireAuth, async (req, res) => {
+  const userId = Number(req.user.id);
+  if (!Number.isInteger(userId)) return res.status(400).json({ error: 'حساب غير صالح.' });
+
+  const emp = await db.prepare('SELECT id, name, role FROM employees WHERE id = ?').get(userId);
+  if (!emp) return res.status(404).json({ error: 'الحساب غير موجود.' });
+
+  const { name, currentPassword, newPassword } = req.body || {};
+  if (name !== undefined && (typeof name !== 'string' || !name.trim())) {
+    return res.status(400).json({ error: 'الاسم غير صالح.' });
+  }
+  if (newPassword !== undefined) {
+    if (typeof newPassword !== 'string' || newPassword.length < 4) {
+      return res.status(400).json({ error: 'كلمة المرور يجب أن تكون 4 أحرف على الأقل.' });
+    }
+    if (!currentPassword || typeof currentPassword !== 'string') {
+      return res.status(400).json({ error: 'أدخل كلمة المرور الحالية لتغيير كلمة المرور.' });
+    }
+    const full = await db.prepare('SELECT password_hash FROM employees WHERE id = ?').get(userId);
+    if (!full || !bcrypt.compareSync(String(currentPassword), full.password_hash)) {
+      return res.status(401).json({ error: 'كلمة المرور الحالية غير صحيحة.' });
+    }
+  }
+
+  const fields = [];
+  const values = [];
+  if (name !== undefined) { fields.push('name = ?'); values.push(name.trim()); }
+  if (newPassword !== undefined) { fields.push('password_hash = ?'); values.push(bcrypt.hashSync(newPassword, 10)); fields.push('must_change_password = FALSE'); }
+  if (!fields.length) return res.status(400).json({ error: 'لم يتم إرسال أي تعديل.' });
+  values.push(userId);
+  await db.prepare(`UPDATE employees SET ${fields.join(', ')} WHERE id = ?`).run(...values);
+
+  const updated = await db.prepare('SELECT id, name, role, shift, company, department, must_change_password FROM employees WHERE id = ?').get(userId);
+  res.json({ ok: true, user: updated, message: 'تم تحديث بيانات حسابك بنجاح.' });
+});
+
 // Delete an employee (and their daily records / summary via ON DELETE CASCADE)
 router.delete('/employee/:id', requireAuth, requireAdmin, async (req, res) => {
   const targetId = Number(req.params.id);
@@ -338,7 +541,9 @@ router.delete('/employee/:id', requireAuth, requireAdmin, async (req, res) => {
 
   const emp = (await db.prepare('SELECT id, role FROM employees WHERE id = ?').get(targetId));
   if (!emp) return res.status(404).json({ error: 'الموظف غير موجود.' });
-  if (emp.role === 'admin') return res.status(403).json({ error: 'لا يمكن حذف حساب مدير.' });
+  const primaryAdminId = await getPrimaryAdminId();
+  if (targetId === primaryAdminId) return res.status(403).json({ error: 'لا يمكن حذف حساب مدير النظام الأساسي.' });
+  if (targetId === req.user.id) return res.status(400).json({ error: 'لا يمكنك حذف حسابك من هنا.' });
 
   (await db.prepare('DELETE FROM employees WHERE id = ?').run(targetId));
   res.json({ ok: true, message: 'تم حذف الموظف بنجاح.' });
@@ -351,7 +556,8 @@ router.post('/employee/:id/reset-password', requireAuth, requireAdmin, async (re
 
   const emp = (await db.prepare('SELECT id, role FROM employees WHERE id = ?').get(targetId));
   if (!emp) return res.status(404).json({ error: 'الموظف غير موجود.' });
-  if (emp.role === 'admin') return res.status(403).json({ error: 'لا يمكن تغيير كلمة مرور حساب مدير من هنا.' });
+  const primaryAdminId = await getPrimaryAdminId();
+  if (targetId === primaryAdminId) return res.status(403).json({ error: 'لا يمكن تغيير كلمة مرور مدير النظام الأساسي من هنا.' });
 
   let { newPassword } = req.body || {};
   let generated = false;
@@ -377,7 +583,7 @@ router.get('/employees', requireAuth, requireSupervisor, async (req, res) => {
     FROM employees
     ORDER BY name
   `).all());
-  const total = rows.filter(r => r.role === 'employee').length;
+  const total = rows.filter(r => r.role === 'employee' && (r.status || 'active') === 'active').length;
   const primaryAdminId = await getPrimaryAdminId();
 
   // Mark employees who currently hold a Top 5 rank in at least one stage
@@ -479,10 +685,11 @@ router.get('/overview', requireAuth, requireAdmin, async (req, res) => {
 
   const count = async (extraSql = '', extraParams = []) => {
     const params = [...extraParams];
-    let sql = `SELECT COUNT(*) c FROM employees e WHERE e.role = 'employee'`;
+    let sql = `SELECT COUNT(*) c FROM employees e WHERE e.role = 'employee' AND COALESCE(e.status,'active') = 'active'`;
     if (shift) { sql += ' AND e.shift = ?'; params.push(shift); }
-    sql += attendanceFilter;
-    params.push(...attendanceParams);
+    // Demographic KPIs (employees/company/students/graduates) are roster KPIs,
+    // not attendance KPIs. They must not shrink just because a selected date
+    // range has no attendance row for someone.
     sql += extraSql;
     return (await db.prepare(sql).get(...params)).c;
   };
@@ -505,7 +712,8 @@ router.post('/employee/:id/reset-default', requireAuth, requireAdmin, async (req
 
   const emp = (await db.prepare('SELECT id, role FROM employees WHERE id = ?').get(targetId));
   if (!emp) return res.status(404).json({ error: 'الموظف غير موجود.' });
-  if (emp.role === 'admin') return res.status(403).json({ error: 'لا يمكن تغيير كلمة مرور حساب مدير من هنا.' });
+  const primaryAdminId = await getPrimaryAdminId();
+  if (targetId === primaryAdminId) return res.status(403).json({ error: 'لا يمكن تغيير كلمة مرور مدير النظام الأساسي من هنا.' });
 
   const hash = bcrypt.hashSync(DEFAULT_PASSWORD, 10);
   (await db.prepare('UPDATE employees SET password_hash = ?, must_change_password = FALSE WHERE id = ?').run(hash, targetId));
@@ -522,7 +730,10 @@ router.patch('/employee/:id', requireAuth, requireAdmin, async (req, res) => {
 
   const emp = (await db.prepare('SELECT id, role FROM employees WHERE id = ?').get(targetId));
   if (!emp) return res.status(404).json({ error: 'الموظف غير موجود.' });
-  if (emp.role === 'admin') return res.status(403).json({ error: 'لا يمكن تعديل حساب مدير من هنا.' });
+  const primaryAdminId = await getPrimaryAdminId();
+  if (targetId === primaryAdminId) {
+    return res.status(403).json({ error: 'حساب مدير النظام الأساسي محمي. استخدم إعدادات حسابك لتعديل الاسم أو كلمة المرور.' });
+  }
 
   let { newId, name, company, shift, department, education, residence, emp_num } = req.body || {};
   if (name !== undefined && (typeof name !== 'string' || !name.trim())) {

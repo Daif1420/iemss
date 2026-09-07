@@ -24,12 +24,13 @@
   <main class="container">
     <div class="hero">
       <div><span class="eyebrow">إدارة الموظفين</span><h1>إدارة الموظفين</h1><p>عرض بيانات كل الموظفين، تعديل الـID والاسم، تغيير كلمات المرور، أو حذف موظف.</p></div>
+      <button class="ghost-btn" id="my-account-btn" type="button">حسابي</button>
     </div>
 
     <section class="emp-search-row">
       <input type="text" id="emp-search" placeholder="ابحث بالاسم أو الـID...">
       <div style="display:flex;align-items:center">
-        <div class="emp-total-badge">إجمالي الموظفين: <span id="emp-total">—</span></div>
+        <div class="emp-total-badge">إجمالي الموظفين النشطين: <span id="emp-total">—</span></div>
         <div class="emp-count" id="emp-count">—</div>
       </div>
     </section>
@@ -71,6 +72,20 @@
 
     <footer class="legal">Intercom IEMS © لوحة التحكم الداخلية</footer>
   </main>
+</div>
+
+
+<!-- My account modal -->
+<div class="modal-overlay" id="my-account-modal">
+  <div class="modal-card">
+    <h3>إعدادات حسابي</h3>
+    <p class="muted" style="margin-bottom:12px">يمكنك تغيير اسمك وكلمة مرورك. لا يمكن لأي مدير آخر تعديل الحساب الأساسي من إدارة الموظفين.</p>
+    <div class="field"><label for="my-name">الاسم</label><input type="text" id="my-name"></div>
+    <div class="field"><label for="my-current-password">كلمة المرور الحالية</label><input type="password" id="my-current-password" autocomplete="current-password"></div>
+    <div class="field"><label for="my-new-password">كلمة المرور الجديدة</label><input type="password" id="my-new-password" autocomplete="new-password" placeholder="اتركها كما هي إذا لا تريد تغييرها"></div>
+    <div class="modal-error" id="my-account-error"></div>
+    <div class="modal-actions"><button class="cancel" id="my-account-cancel">إلغاء</button><button class="save" id="my-account-save">حفظ</button></div>
+  </div>
 </div>
 
 <!-- View employee details modal -->

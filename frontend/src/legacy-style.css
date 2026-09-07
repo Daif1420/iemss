@@ -1030,3 +1030,8 @@ html[data-theme="dark"] .reports-page table:not(.pr-table) td{
 .glass:after{content:"";position:absolute;right:28px;top:-24px;width:74px;height:74px;border-radius:20px;border:1px solid rgba(255,255,255,.35);background:linear-gradient(135deg,rgba(255,255,255,.28),rgba(255,255,255,.03));transform:rotate(12deg);z-index:-1}
 html[data-theme="dark"] .visual-side{background:linear-gradient(145deg,#020611,#062d58 48%,#075a73)}
 html[data-theme="dark"] .glass{background:rgba(14,20,30,.82);box-shadow:0 26px 70px rgba(0,0,0,.4)}
+/* Protected primary-admin account settings */
+.hero #my-account-btn{white-space:nowrap;align-self:center}
+#my-account-error.error{display:block}
+.import-history-table td,.import-history-table th{white-space:nowrap}
+@media(max-width:680px){.hero #my-account-btn{align-self:flex-start;margin-top:8px}.import-history-table{font-size:11px}}

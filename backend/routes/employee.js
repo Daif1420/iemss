@@ -246,6 +246,11 @@ router.get('/dashboard', requireAuth, async (req, res) => {
   res.json(payload);
 });
 
+router.get('/months', requireAuth, async (req, res) => {
+  const rows = await db.prepare(`SELECT DISTINCT month_start FROM employee_monthly_summary ORDER BY month_start DESC`).all();
+  res.json({ months: rows.map(r => String(r.month_start).slice(0, 7)) });
+});
+
 router.get('/:id', requireAuth, async (req, res) => {
   const targetId = Number(req.params.id);
   if (!canAccess(req, targetId)) {
@@ -253,22 +258,25 @@ router.get('/:id', requireAuth, async (req, res) => {
   }
 
   const emp = (await db.prepare(`
-    SELECT id, emp_num, name, education, residence, company, shift, department
+    SELECT id, emp_num, name, education, residence, company, shift, target_shift, department
     FROM employees WHERE id = ? AND role = 'employee'
   `).get(targetId));
   if (!emp) return res.status(404).json({ error: 'الموظف غير موجود' });
 
-  const summary = (await db.prepare(`
-    SELECT total_achievement, total_target, percentage, bonus_tier,
+  const { from, to, stage, month } = req.query;
+  const summaryFields = `total_achievement, total_target, percentage, bonus_tier,
            unauthorized_absence, total_absence, work_nature_allowance,
            monthly_target, total_present_days, total_absence_days,
            casual_leave, leave_with_permission, leave_without_permission,
            sick_leave, late_days, late_hours, overtime_days, overtime_hours,
-           special_bonus_days, special_deductions
-    FROM employee_summary WHERE employee_id = ?
-  `).get(targetId)) || {};
-
-  const { from, to, stage } = req.query;
+           special_bonus_days, special_deductions`;
+  let summary = {};
+  if (/^\d{4}-(0[1-9]|1[0-2])$/.test(String(month || ''))) {
+    summary = (await db.prepare(`SELECT ${summaryFields} FROM employee_monthly_summary WHERE employee_id = ? AND month_start = ?`).get(targetId, `${month}-01`)) || {};
+  }
+  if (!Object.keys(summary).length) {
+    summary = (await db.prepare(`SELECT ${summaryFields} FROM employee_summary WHERE employee_id = ?`).get(targetId)) || {};
+  }
   let sql = 'SELECT stage, entry_date, value_num, value_text FROM stage_daily WHERE employee_id = ?';
   const params = [targetId];
   if (from) { sql += ' AND entry_date >= ?'; params.push(from); }
@@ -315,11 +323,40 @@ router.get('/:id', requireAuth, async (req, res) => {
 
   const supervisorTargets = await getSupervisorTargetDetails(targetId, emp.name, from, to);
 
+  // Return every shift snapshot for this employee. The canonical employee
+  // profile/KPIs still come from employees + employee_summary, while duplicate
+  // shifts get their own daily details in the employee view.
+  const shiftProfilesRows = await db.prepare(
+    `SELECT shift, profile_json
+       FROM employee_shift_profiles
+      WHERE employee_id = ?
+      ORDER BY CASE shift WHEN 'A' THEN 1 WHEN 'B' THEN 2 WHEN 'C' THEN 3 WHEN 'D' THEN 4 ELSE 5 END, shift`
+  ).all(targetId);
+  const shiftProfiles = shiftProfilesRows.map(r => {
+    const profile = r.profile_json || {};
+    return {
+      shift: r.shift,
+      stages: profile.stages || [],
+      summary: profile.summary || {},
+      employee: {
+        id: profile.id ?? targetId,
+        emp_num: profile.emp_num ?? emp.emp_num,
+        name: profile.name ?? emp.name,
+        education: profile.education ?? emp.education,
+        residence: profile.residence ?? emp.residence,
+        company: profile.company ?? emp.company,
+        shift: r.shift,
+        department: profile.department ?? emp.department,
+      }
+    };
+  });
+
   res.json({
     employee: emp,
     summary,
     attendance: { present_days: Number(attendance.present_days || 0), absent_days: Number(attendance.absent_days || 0) },
     stages: byStage,
+    shiftProfiles,
     myRanks,
     supervisorTargets,
   });
