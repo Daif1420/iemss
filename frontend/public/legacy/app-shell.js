@@ -9,7 +9,7 @@
   try { user = JSON.parse(sessionStorage.getItem('iems_user') || 'null'); } catch (_) {}
   const isDark = document.documentElement.dataset.theme === 'dark' || (localStorage.getItem('iems-theme') === 'dark');
   const name = (user && user.name) ? user.name : '';
-  const roleLabel = user && user.role === 'admin' ? 'مدير النظام' : user && user.role === 'supervisor' ? 'مشرف' : 'موظف';
+  const roleLabel = user && user.role === 'system_creator' ? 'منشئ النظام' : user && user.role === 'admin' ? 'مدير النظام' : user && user.role === 'supervisor' ? 'مشرف' : 'موظف';
 
   const style = document.createElement('style');
   style.textContent = `
@@ -64,20 +64,24 @@
   });
 
   const adminOnly = document.querySelectorAll('[data-nav-role="admin"]');
-  adminOnly.forEach(el => { el.style.display = user?.role === 'admin' ? 'inline-flex' : 'none'; });
+  adminOnly.forEach(el => { el.style.display = (user?.role === 'admin' || user?.role === 'system_creator') ? 'inline-flex' : 'none'; });
   const uploader = document.querySelectorAll('[data-nav-role="supervisor"]');
-  uploader.forEach(el => { el.style.display = (user?.role === 'admin' || user?.role === 'supervisor') ? 'inline-flex' : 'none'; });
+  uploader.forEach(el => { el.style.display = (user?.role === 'system_creator' || user?.role === 'admin' || user?.role === 'supervisor') ? 'inline-flex' : 'none'; });
 
   const importLink = document.getElementById('nav-import');
-  if (importLink) importLink.style.display = (user?.role === 'admin' || user?.role === 'supervisor') ? 'inline-flex' : 'none';
+  if (importLink) importLink.style.display = (user?.role === 'system_creator' || user?.role === 'admin' || user?.role === 'supervisor') ? 'inline-flex' : 'none';
   const manualLink = document.getElementById('nav-manual-entry');
-  if (manualLink) manualLink.style.display = user?.role === 'admin' ? 'inline-flex' : 'none';
+  if (manualLink) manualLink.style.display = (user?.role === 'admin' || user?.role === 'system_creator') ? 'inline-flex' : 'none';
   const reportsLink = document.getElementById('nav-reports');
-  if (reportsLink) reportsLink.style.display = user?.role === 'admin' ? 'inline-flex' : 'none';
+  if (reportsLink) reportsLink.style.display = (user?.role === 'admin' || user?.role === 'system_creator') ? 'inline-flex' : 'none';
   const employeesLink = document.getElementById('nav-employees');
-  if (employeesLink) employeesLink.style.display = (user?.role === 'admin' || user?.role === 'supervisor') ? 'inline-flex' : 'none';
+  if (employeesLink) employeesLink.style.display = (user?.role === 'system_creator' || user?.role === 'admin' || user?.role === 'supervisor') ? 'inline-flex' : 'none';
   const homeLink = document.getElementById('nav-home');
   if (homeLink) homeLink.style.display = user?.role === 'employee' ? 'none' : 'inline-flex';
+  const auditLink = document.getElementById('nav-audit');
+  if (auditLink) auditLink.style.display = user?.role === 'system_creator' ? 'inline-flex' : 'none';
+  const themesLink = document.getElementById('nav-themes');
+  if (themesLink) themesLink.style.display = user?.role === 'system_creator' ? 'inline-flex' : 'none';
 
   // Language toggle (AR/EN) — shared across every inner page that loads this file.
   const langToggle = document.getElementById('lang-toggle');

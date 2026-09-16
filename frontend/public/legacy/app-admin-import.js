@@ -2,12 +2,12 @@ const token = sessionStorage.getItem('iems_token');
 const userRaw = sessionStorage.getItem('iems_user');
 if (!token || !userRaw) window.location.href = '/index.html';
 const user = JSON.parse(userRaw);
-if (user.role !== 'admin' && user.role !== 'supervisor') window.location.href = '/home.html';
+if (!['system_creator','admin','supervisor'].includes(user.role)) window.location.href = '/home.html';
 const $ = id => document.getElementById(id);
 function authHeaders(){return {Authorization:'Bearer '+token,'Content-Type':'application/json'}};
 async function api(path,opts={}){const res=await fetch(path,{...opts,headers:{...authHeaders(),...(opts.headers||{})}});if(res.status===401){sessionStorage.clear();location.href='/index.html';throw new Error('انتهت الجلسة')}const data=await res.json();if(!res.ok)throw new Error(data.error||'حدث خطأ');return data}
 function esc(v){return String(v??'').replace(/[&<>'"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;',"'":'&#39;','"':'&quot;'}[c]))}
-$('chip-name').textContent=user.name;$('chip-role').textContent=`ID: ${user.id} · ${user.role==='admin'?'مدير النظام':'مشرف'}`;$('chip-avatar').textContent=(user.name||'?').trim()[0]||'?';$('logout-btn').onclick=()=>{sessionStorage.clear();location.href='/index.html'};
+$('chip-name').textContent=user.name;$('chip-role').textContent=`ID: ${user.id} · ${user.role==='system_creator'?'منشئ النظام':user.role==='admin'?'مدير النظام':'مشرف'}`;$('chip-avatar').textContent=(user.name||'?').trim()[0]||'?';$('logout-btn').onclick=()=>{sessionStorage.clear();location.href='/index.html'};
 const savedTheme=localStorage.getItem('iems-theme')||'light';document.documentElement.dataset.theme=savedTheme;
 function themeIcon(){if(!$('theme-toggle'))return;$('theme-toggle').innerHTML=document.documentElement.dataset.theme==='dark'?'<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="4"></circle><path d="M12 2v2"></path><path d="M12 20v2"></path><path d="m4.93 4.93 1.41 1.41"></path><path d="m17.66 17.66 1.41 1.41"></path><path d="M2 12h2"></path><path d="M20 12h2"></path><path d="m6.34 17.66-1.41 1.41"></path><path d="m19.07 4.93-1.41 1.41"></path></svg>' : '<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20.985 12.486a9 9 0 1 1-9.473-9.472c.405-.022.617.46.402.803a6 6 0 0 0 8.268 8.268c.344-.215.825-.004.803.401"></path></svg>';}
 $('theme-toggle').onclick=()=>{const n=document.documentElement.dataset.theme==='dark'?'light':'dark';document.documentElement.dataset.theme=n;localStorage.setItem('iems-theme',n);themeIcon()};themeIcon();

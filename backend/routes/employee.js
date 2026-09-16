@@ -6,7 +6,7 @@ const router = express.Router();
 
 
 function canAccess(req, targetId) {
-  return req.user.role === 'admin' || Number(req.user.id) === Number(targetId);
+  return (req.user.role === 'admin' || req.user.role === 'system_creator') || Number(req.user.id) === Number(targetId);
 }
 
 function normalizeDate(value) {
@@ -25,13 +25,18 @@ function dateFilterSql(alias, from, to, params) {
 }
 
 router.get('/list', requireAuth, async (req, res) => {
-  if (req.user.role === 'admin') {
+  if (req.user.role === 'admin' || req.user.role === 'system_creator') {
     const rows = (await db.prepare(`
       SELECT id, name, shift, company, department
-      FROM employees
-      WHERE role = 'employee'
-      ORDER BY name
+      FROM employees WHERE role = 'employee' ORDER BY name
     `).all());
+    return res.json({ employees: rows });
+  }
+  if (req.user.role === 'supervisor') {
+    const rows = (await db.prepare(`
+      SELECT id, name, shift, company, department
+      FROM employees WHERE role = 'employee' AND shift = ? ORDER BY name
+    `).all(String(req.user.shift || '').trim()));
     return res.json({ employees: rows });
   }
   const self = (await db.prepare(`
@@ -62,11 +67,10 @@ router.get('/dates', requireAuth, async (req, res) => {
 });
 
 router.get('/shifts', requireAuth, async (req, res) => {
+  if (req.user.role === 'supervisor') return res.json({ shifts: req.user.shift ? [req.user.shift] : [] });
   const rows = (await db.prepare(`
-    SELECT DISTINCT shift
-    FROM employees
-    WHERE role = 'employee' AND shift IS NOT NULL AND TRIM(shift) <> ''
-    ORDER BY shift
+    SELECT DISTINCT shift FROM employees
+    WHERE role = 'employee' AND shift IS NOT NULL AND TRIM(shift) <> '' ORDER BY shift
   `).all());
   res.json({ shifts: rows.map(r => r.shift) });
 });
@@ -144,8 +148,9 @@ router.get('/dashboard', requireAuth, async (req, res) => {
   if (req.query.to && !to) return res.status(400).json({ error: 'صيغة تاريخ النهاية غير صحيحة.' });
   if (from && to && from > to) return res.status(400).json({ error: 'تاريخ البداية يجب أن يسبق تاريخ النهاية.' });
 
-  const isAdmin = req.user.role === 'admin';
-  const visibleEmployeeIds = isAdmin ? null : [Number(req.user.id)];
+  const isAdmin = req.user.role === 'admin' || req.user.role === 'system_creator';
+  const isSupervisor = req.user.role === 'supervisor';
+  const visibleEmployeeIds = isAdmin || isSupervisor ? null : [Number(req.user.id)];
   const baseParams = [];
   let baseWhere = `WHERE e.role = 'employee'`;
   if (visibleEmployeeIds) {
@@ -153,6 +158,7 @@ router.get('/dashboard', requireAuth, async (req, res) => {
     baseParams.push(visibleEmployeeIds[0]);
   }
   if (isAdmin) baseWhere = addIn(baseWhere, baseParams, 'e.shift', requestedShifts);
+  if (isSupervisor) { baseWhere += ' AND e.shift = ?'; baseParams.push(String(req.user.shift || '').trim()); }
 
   const employees = (await db.prepare(`SELECT e.id, e.name, e.company, e.shift, e.department FROM employees e ${baseWhere} ORDER BY e.name`).all(...baseParams));
   const employeeCount = employees.length;
@@ -161,6 +167,7 @@ router.get('/dashboard', requireAuth, async (req, res) => {
   let attendanceWhere = `WHERE e.role = 'employee' AND sd.stage = 'الحضور'`;
   if (visibleEmployeeIds) { attendanceWhere += ` AND e.id = ?`; attendanceParams.push(visibleEmployeeIds[0]); }
   if (isAdmin) attendanceWhere = addIn(attendanceWhere, attendanceParams, 'e.shift', requestedShifts);
+  if (isSupervisor) { attendanceWhere += ' AND e.shift = ?'; attendanceParams.push(String(req.user.shift || '').trim()); }
   attendanceWhere += dateFilterSql('sd', from, to, attendanceParams);
 
   const attendance = (await db.prepare(`
@@ -177,12 +184,13 @@ router.get('/dashboard', requireAuth, async (req, res) => {
 
   // Top 5 is always computed company-wide (or per selected shift) so rankings are meaningful,
   // but only admins get the full breakdown back; employees only learn their own rank(s).
-  const { stages, top5ByStage } = await computeTop5ByStage(from, to, requestedStages, isAdmin ? requestedShifts : []);
+  const { stages, top5ByStage } = await computeTop5ByStage(from, to, requestedStages, isAdmin ? requestedShifts : (isSupervisor ? [String(req.user.shift || '').trim()] : []));
 
   const presentDaysByEmployeeParams = [];
   let presentWhere = `WHERE sd.stage = 'الحضور' AND e.role = 'employee'`;
   if (visibleEmployeeIds) { presentWhere += ` AND e.id = ?`; presentDaysByEmployeeParams.push(visibleEmployeeIds[0]); }
   if (isAdmin) presentWhere = addIn(presentWhere, presentDaysByEmployeeParams, 'e.shift', requestedShifts);
+  if (isSupervisor) { presentWhere += ' AND e.shift = ?'; presentDaysByEmployeeParams.push(String(req.user.shift || '').trim()); }
   presentWhere += dateFilterSql('sd', from, to, presentDaysByEmployeeParams);
   const attendanceByEmployee = (await db.prepare(`
     SELECT sd.employee_id AS id, COALESCE(SUM(CASE WHEN sd.value_num IN (0.5, 1, 1.5) THEN sd.value_num ELSE 0 END), 0) AS present_days

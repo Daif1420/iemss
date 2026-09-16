@@ -2,7 +2,7 @@ const token = sessionStorage.getItem('iems_token');
 const userRaw = sessionStorage.getItem('iems_user');
 if (!token || !userRaw) window.location.href = '/index.html';
 const user = JSON.parse(userRaw);
-if (user.role !== 'admin') window.location.href = '/home.html';
+if (!['system_creator','admin'].includes(user.role)) window.location.href = '/home.html';
 
 const $ = id => document.getElementById(id);
 function authHeaders() { return { Authorization: 'Bearer ' + token, 'Content-Type': 'application/json' }; }

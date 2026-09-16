@@ -37,6 +37,19 @@
 })();
 /* IEMS Home: unified dashboard + attendance logic. The former page-specific scripts are intentionally removed. */
 (() => {
+async function loadSystemBanner() {
+  try {
+    const token = sessionStorage.getItem('iems_token');
+    if (!token) return;
+    const res = await fetch('/api/admin/banner', { headers: { Authorization: 'Bearer ' + token } });
+    if (!res.ok) return;
+    const data = await res.json();
+    if (data.banner && document.getElementById('system-banner')) {
+      document.getElementById('system-banner').src = data.banner;
+      document.getElementById('system-banner-wrap').style.display = 'block';
+    }
+  } catch (_) {}
+}
 const token = sessionStorage.getItem('iems_token');
 const userRaw = sessionStorage.getItem('iems_user');
 if (!token || !userRaw) window.location.href = '/index.html';
@@ -98,18 +111,18 @@ $('theme-toggle').addEventListener('click', () => {
   updateThemeIcon(); syncThemeLogos();
 });
 updateThemeIcon(); syncThemeLogos();
-const ROLE_LABEL = user.role === 'admin' ? 'مدير النظام' : user.role === 'supervisor' ? 'مشرف' : 'Shift ' + (user.shift || '-');
+const ROLE_LABEL = user.role === 'system_creator' ? 'منشئ النظام' : user.role === 'admin' ? 'مدير النظام' : user.role === 'supervisor' ? 'مشرف · Shift ' + (user.shift || '-') : 'Shift ' + (user.shift || '-');
 $('chip-name').textContent = user.name;
 $('chip-role').textContent = `ID: ${user.id} · ${ROLE_LABEL}`;
 $('chip-avatar').textContent = (user.name || '?').trim()[0] || '?';
 $('logout-btn').addEventListener('click', () => { sessionStorage.clear(); window.location.href = '/index.html'; });
 // Employees management page: full-control admin only.
-if ((user.role === 'admin' || user.role === 'supervisor') && $('nav-employees')) $('nav-employees').style.display = 'inline-flex';
-if (user.role === 'admin' && $('nav-reports')) $('nav-reports').style.display = 'inline-flex';
-if ((user.role === 'admin' || user.role === 'supervisor') && $('nav-manual-entry')) $('nav-manual-entry').style.display = 'inline-flex';
+if ((user.role === 'system_creator' || user.role === 'admin' || user.role === 'supervisor') && $('nav-employees')) $('nav-employees').style.display = 'inline-flex';
+if ((user.role === 'system_creator' || user.role === 'admin' || user.role === 'supervisor') && $('nav-reports')) $('nav-reports').style.display = 'inline-flex';
+if ((user.role === 'system_creator' || user.role === 'admin' || user.role === 'supervisor') && $('nav-manual-entry')) $('nav-manual-entry').style.display = 'inline-flex';
 
 // Company performance summary + company comparison chart + employee daily details: admin only.
-if (user.role === 'admin') {
+if (user.role === 'admin' || user.role === 'system_creator') {
   if ($('company-summary-panel')) $('company-summary-panel').style.display = '';
   if ($('single-company-chart')) $('single-company-chart').style.display = '';
   if ($('employee-detail-panel')) $('employee-detail-panel').style.display = '';
@@ -128,7 +141,7 @@ async function initFilters() {
     });
   }
   const calls = [api('/api/employee/stages'), api('/api/employee/dates')];
-  if (user.role === 'admin') calls.push(api('/api/employee/shifts'));
+  if (user.role === 'admin' || user.role === 'system_creator') calls.push(api('/api/employee/shifts'));
   const [{ stages }, { dates }, shiftsRes] = await Promise.all(calls);
   availableDates = dates || [];
 
@@ -136,7 +149,7 @@ async function initFilters() {
   const performanceStages = (stages || []).filter(s => String(s).trim() !== 'الحضور');
   stageSel.innerHTML = '<option value="__ALL__">كل المراحل</option>' + performanceStages.map(s => `<option value="${escapeHtml(s)}">${escapeHtml(s)}</option>`).join('');
 
-  if (user.role === 'admin') {
+  if (user.role === 'admin' || user.role === 'system_creator') {
     $('f-shift-field').style.display = 'flex';
     const shifts = (shiftsRes && shiftsRes.shifts) || [];
     $('f-shift').innerHTML = '<option value="__ALL__">كل الشيفتات</option>' + shifts.map(s => `<option value="${escapeHtml(s)}">${escapeHtml(s)}</option>`).join('');
@@ -227,7 +240,7 @@ function kpiCard(label, value, cls, icon, trendShape) {
 window.__iemsKpi = { svgIcon, kpiLineChart, KPI_TREND_SHAPES, kpiCard };
 
 function renderKpis(overview) {
-  if (user.role !== 'admin') return;
+  if (user.role !== 'admin' && user.role !== 'system_creator') return;
   const o = overview || {};
   const cards = [
     ['إجمالي الموظفين', Number(o.total || 0), 'blue', 'users'],
@@ -245,7 +258,7 @@ function renderUnauthorizedAbsence(data) {
   const panel = $('unauthorized-absence-panel');
   const list = $('unauthorized-absence-list');
   const count = $('absence-count');
-  if (!panel || !list || user.role !== 'admin') return;
+  if (!panel || !list || (user.role !== 'admin' && user.role !== 'system_creator')) return;
 
   const rows = Array.isArray(data?.unauthorizedAbsenceEmployees) ? data.unauthorizedAbsenceEmployees : [];
   panel.style.display = rows.length ? 'block' : 'none';
@@ -262,7 +275,7 @@ function renderUnauthorizedAbsence(data) {
 }
 
 function renderModernDashboard(data) {
-  if (user.role !== 'admin') { $('modern-dashboard').style.display = 'none'; return; }
+  if (user.role !== 'admin' && user.role !== 'system_creator') { $('modern-dashboard').style.display = 'none'; return; }
   $('modern-dashboard').style.display = 'block';
   renderKpis(companyOverview);
   // Top-5 moved to Reports; attendance alarm is rendered by app-attendance.js.
@@ -322,7 +335,7 @@ function renderActivities(data) {
 
 // ---- Admin: company-wide overview ----
 async function renderOverview() {
-  if (user.role !== 'admin') return;
+  if (user.role !== 'admin' && user.role !== 'system_creator') return;
   try {
     const from = $('f-from')?.value || '';
     const to = $('f-to')?.value || '';
@@ -341,7 +354,7 @@ async function renderOverview() {
 
 // ---- Top 5 (admin only) ----
 function renderTop5(data) {
-  if (user.role !== 'admin') return;
+  if (user.role !== 'admin' && user.role !== 'system_creator') return;
   const stage = $('f-stage').value;
   const shiftVal = $('f-shift') ? $('f-shift').value : '__ALL__';
   const groups = stage !== '__ALL__' ? { [stage]: data.selectedTop5 || [] } : data.top5ByStage || {};
@@ -365,7 +378,7 @@ function renderTop5(data) {
 // ---- Self view (employee role only) ----
 async function loadSelfView(dashData) {
   const employeeOnly = user.role === 'employee';
-  if (user.role === 'admin' || user.role === 'supervisor') {
+  if (user.role === 'system_creator' || user.role === 'admin' || user.role === 'supervisor') {
     $('self-view-grid').style.display = 'none';
     $('detail-panel').style.display = 'none';
     if ($('supervisor-target-panel')) $('supervisor-target-panel').style.display = 'none';
@@ -683,5 +696,5 @@ if(!window.html2canvas||!window.jspdf){
   root.remove(); return;
 }const btn=$('attendance-pdf');btn.disabled=true;btn.dataset.original=btn.textContent;btn.textContent='جاري إنشاء PDF...';let root;try{root=buildPdfRoot();const canvas=await html2canvas(root,{scale:2,backgroundColor:'#fff',useCORS:true,logging:false});const {jsPDF}=window.jspdf;const pdf=new jsPDF({unit:'mm',format:'a4',orientation:'landscape'});const pageW=297,pageH=210,margin=8,imgW=pageW-margin*2,imgH=canvas.height*imgW/canvas.width,usableH=pageH-margin*2;let offset=0,page=0;while(offset<imgH){if(page)pdf.addPage();const sourceY=Math.round(offset/imgH*canvas.height);const sourceH=Math.min(canvas.height-sourceY,Math.round(usableH/imgW*canvas.width));const slice=document.createElement('canvas');slice.width=canvas.width;slice.height=sourceH;slice.getContext('2d').drawImage(canvas,0,sourceY,canvas.width,sourceH,0,0,canvas.width,sourceH);const sliceH=slice.height*imgW/slice.width;pdf.addImage(slice.toDataURL('image/jpeg',0.92),'JPEG',margin,margin,imgW,sliceH);offset+=usableH;page++}pdf.save(`IEMS_Attendance_${data.range.from}_${data.range.to}.pdf`)}catch(e){console.error(e);alert('حدث خطأ أثناء إنشاء ملف PDF.')}finally{root?.remove();btn.disabled=false;btn.textContent=btn.dataset.original||'تحميل PDF'}}
 $('attendance-print').onclick=()=>print();$('attendance-excel').onclick=exportExcel;$('attendance-pdf').onclick=exportPdf;
-(async()=>{try{bindMulti();await init();await refresh()}catch(e){console.error(e)}})();
+(async()=>{try{bindMulti();await loadSystemBanner();await init();await refresh()}catch(e){console.error(e)}})();
 })();

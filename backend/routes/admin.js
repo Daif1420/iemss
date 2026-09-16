@@ -1,7 +1,7 @@
 const express = require('express');
 const bcrypt = require('bcryptjs');
 const db = require('../database/init');
-const { requireAuth, requireAdmin, requireSupervisor, requireUploader } = require('../middleware/auth');
+const { requireAuth, requireAdmin, requireSupervisor, requireUploader, requireSystemCreator, isCreator } = require('../middleware/auth');
 const { parseMasterWorkbook } = require('../utils/master-import');
 const { computeTop5ByStage } = require('./employee');
 
@@ -9,6 +9,15 @@ const router = express.Router();
 function parseList(v){const a=Array.isArray(v)?v:String(v??'').split(',');return [...new Set(a.flatMap(x=>String(x).split(',')).map(x=>x.trim()).filter(x=>x&&x!=='__ALL__'))];}
 
 const DEFAULT_PASSWORD = 'P@ssw0rd';
+
+async function writeAudit(req, action, entityType = null, entityId = null, details = {}) {
+  try {
+    await db.prepare(`INSERT INTO audit_logs
+      (actor_id, actor_name, action, entity_type, entity_id, details_json, ip)
+      VALUES (?, ?, ?, ?, ?, ?::jsonb, ?)`)
+      .run(Number(req.user?.id) || null, req.user?.name || null, action, entityType, entityId == null ? null : String(entityId), JSON.stringify(details || {}), req.ip || null);
+  } catch (e) { console.error('Audit log write failed:', e); }
+}
 
 // Loose Arabic name normalization used to match supervisor names (from the
 // OPP A / OPP B / QC / File Trail sheets) against employees.name.
@@ -465,6 +474,7 @@ router.post('/import-master', requireAuth, requireUploader, async (req, res) => 
       JSON.stringify({ updatedEmployees: result.updatedEmployees, createdEmployees: result.createdEmployees })
     );
 
+    await writeAudit(req, 'import_master', 'import', null, { filename: filename || 'Master.xlsx', month_start: monthStart, updated: result.updated, created: result.created, daily: result.daily, skipped: result.skipped });
     // New employee passwords are intentionally returned once to the admin so they can be distributed.
     res.json({
       ok: true,
@@ -546,11 +556,12 @@ router.delete('/employee/:id', requireAuth, requireAdmin, async (req, res) => {
   if (targetId === req.user.id) return res.status(400).json({ error: 'لا يمكنك حذف حسابك من هنا.' });
 
   (await db.prepare('DELETE FROM employees WHERE id = ?').run(targetId));
+  await writeAudit(req, 'delete_employee', 'employee', targetId, {});
   res.json({ ok: true, message: 'تم حذف الموظف بنجاح.' });
 });
 
 // Reset/change an employee's password
-router.post('/employee/:id/reset-password', requireAuth, requireAdmin, async (req, res) => {
+router.post('/employee/:id/reset-password', requireAuth, requireSystemCreator, async (req, res) => {
   const targetId = Number(req.params.id);
   if (!Number.isInteger(targetId)) return res.status(400).json({ error: 'رقم موظف غير صالح.' });
 
@@ -570,6 +581,7 @@ router.post('/employee/:id/reset-password', requireAuth, requireAdmin, async (re
 
   const hash = bcrypt.hashSync(newPassword, 10);
   (await db.prepare('UPDATE employees SET password_hash = ?, must_change_password = FALSE WHERE id = ?').run(hash, targetId));
+  await writeAudit(req, 'change_password', 'employee', targetId, { generated });
 
   res.json({ ok: true, message: 'تم تغيير كلمة المرور بنجاح.', password: generated ? newPassword : undefined });
 });
@@ -578,11 +590,13 @@ router.post('/employee/:id/reset-password', requireAuth, requireAdmin, async (re
 // Includes every account (regular employees + supervisor accounts + full admins)
 // so the full-control admin can see and change everyone's permission level.
 router.get('/employees', requireAuth, requireSupervisor, async (req, res) => {
+  const scoped = req.user.role === 'supervisor';
   const rows = (await db.prepare(`
     SELECT id, emp_num, name, education, residence, company, shift, department, role, must_change_password, status
     FROM employees
+    WHERE ${scoped ? "role = 'employee' AND shift = ?" : '1=1'}
     ORDER BY name
-  `).all());
+  `).all(...(scoped ? [String(req.user.shift || '').trim()] : [])));
   const total = rows.filter(r => r.role === 'employee' && (r.status || 'active') === 'active').length;
   const primaryAdminId = await getPrimaryAdminId();
 
@@ -613,7 +627,7 @@ router.get('/employees', requireAuth, requireSupervisor, async (req, res) => {
 // original super admin account and must always keep full control — nobody,
 // including other full-control admins, can demote or reassign their role.
 async function getPrimaryAdminId() {
-  const row = (await db.prepare(`SELECT id FROM employees WHERE role = 'admin' ORDER BY id ASC LIMIT 1`).get());
+  const row = (await db.prepare(`SELECT id FROM employees WHERE role IN ('system_creator','admin') ORDER BY CASE WHEN role='system_creator' THEN 0 ELSE 1 END, id ASC LIMIT 1`).get());
   return row ? row.id : null;
 }
 
@@ -622,31 +636,35 @@ router.patch('/employee/:id/role', requireAuth, requireSupervisor, async (req, r
   if (!Number.isInteger(targetId)) return res.status(400).json({ error: 'رقم موظف غير صالح.' });
 
   const { role } = req.body || {};
-  const allowedRoles = ['admin', 'supervisor', 'employee'];
+  const allowedRoles = ['system_creator', 'admin', 'supervisor', 'employee'];
   if (!allowedRoles.includes(role)) return res.status(400).json({ error: 'صلاحية غير صالحة.' });
-
-  // Supervisors may only assign employee <-> supervisor. Only the full
-  // system admin can grant or revoke the admin permission.
-  if (req.user.role === 'supervisor' && role === 'admin') {
-    return res.status(403).json({ error: 'المشرف لا يمكنه منح صلاحية مدير النظام.' });
-  }
 
   if (req.user.id === targetId) {
     return res.status(400).json({ error: 'لا يمكنك تغيير صلاحيتك الخاصة.' });
   }
 
-  const primaryAdminId = await getPrimaryAdminId();
-  if (primaryAdminId !== null && targetId === primaryAdminId) {
-    return res.status(403).json({ error: 'لا يمكن تغيير صلاحية مدير النظام الأساسي.' });
-  }
-
   const target = (await db.prepare('SELECT id, role FROM employees WHERE id = ?').get(targetId));
   if (!target) return res.status(404).json({ error: 'الموظف غير موجود.' });
-  if (req.user.role === 'supervisor' && target.role === 'admin') {
-    return res.status(403).json({ error: 'لا يمكن للمشرف تعديل صلاحية مدير النظام.' });
-  }
 
-  (await db.prepare('UPDATE employees SET role = ? WHERE id = ?').run(role, targetId));
+  // Supervisor: employee <-> supervisor only.
+  if (req.user.role === 'supervisor' && (role === 'admin' || role === 'system_creator' || target.role === 'admin' || target.role === 'system_creator')) {
+    return res.status(403).json({ error: 'المشرف لا يمكنه تعديل صلاحيات الإدارة.' });
+  }
+  // Manager: may manage employee/supervisor accounts, but cannot grant creator,
+  // create another admin, or modify an existing admin/creator.
+  if (req.user.role === 'admin' && (role === 'system_creator' || role === 'admin' || target.role === 'admin' || target.role === 'system_creator')) {
+    return res.status(403).json({ error: 'مدير النظام لا يمكنه تعديل صلاحية منشئ النظام أو صلاحيات مدير النظام.' });
+  }
+  // There is one system-creator account. It is the highest permission level.
+  if (role === 'system_creator') {
+    const existingCreator = await db.prepare("SELECT id FROM employees WHERE role = 'system_creator' LIMIT 1").get();
+    if (existingCreator && Number(existingCreator.id) !== targetId) {
+      return res.status(409).json({ error: 'يوجد بالفعل حساب واحد بصلاحية منشئ النظام.' });
+    }
+  }
+  // Creator has full role-management authority except changing their own role.
+  await db.prepare('UPDATE employees SET role = ? WHERE id = ?').run(role, targetId);
+  await writeAudit(req, 'change_role', 'employee', targetId, { from: target.role, to: role });
   res.json({ ok: true, message: 'تم تحديث الصلاحية بنجاح.', role });
 });
 
@@ -706,7 +724,7 @@ router.get('/overview', requireAuth, requireAdmin, async (req, res) => {
 // Reset an employee's password back to the shared company default
 // ("P@ssw0rd"). Employees never choose their own password - only the admin
 // can set/reset it, from this Employees management page.
-router.post('/employee/:id/reset-default', requireAuth, requireAdmin, async (req, res) => {
+router.post('/employee/:id/reset-default', requireAuth, requireSystemCreator, async (req, res) => {
   const targetId = Number(req.params.id);
   if (!Number.isInteger(targetId)) return res.status(400).json({ error: 'رقم موظف غير صالح.' });
 
@@ -717,6 +735,7 @@ router.post('/employee/:id/reset-default', requireAuth, requireAdmin, async (req
 
   const hash = bcrypt.hashSync(DEFAULT_PASSWORD, 10);
   (await db.prepare('UPDATE employees SET password_hash = ?, must_change_password = FALSE WHERE id = ?').run(hash, targetId));
+  await writeAudit(req, 'reset_default_password', 'employee', targetId, {});
 
   res.json({ ok: true, message: 'تم إعادة كلمة المرور إلى الافتراضية.', password: DEFAULT_PASSWORD });
 });
@@ -993,16 +1012,19 @@ router.post('/manual/supervisor-target', requireAuth, requireAdmin, async (req, 
 // ---- Reports (used by public/reports.html) ----
 
 // Distinct stage names recorded in stage_daily, for the report stage filter.
-router.get('/report/stages', requireAuth, requireAdmin, async (req, res) => {
+router.get('/report/stages', requireAuth, requireSupervisor, async (req, res) => {
   const rows = (await db.prepare(`SELECT DISTINCT stage FROM stage_daily WHERE stage <> 'TOTAL TARGET %' ORDER BY stage`).all());
   res.json({ stages: rows.map(r => r.stage) });
 });
 
 // Employees who have at least one daily record within [from, to] (optionally
 // filtered to one stage), with their target/value summed over that range.
-router.get('/report/attendance', requireAuth, requireAdmin, async (req, res) => {
+router.get('/report/attendance', requireAuth, requireSupervisor, async (req, res) => {
   const { from, to } = req.query;
   const stages = parseList(req.query.stage);
+  const isShiftScoped = req.user.role === 'supervisor';
+  const supervisorShift = isShiftScoped ? String(req.user.shift || '').trim() : null;
+  if (isShiftScoped && !supervisorShift) return res.status(403).json({ error: 'حساب المشرف غير مرتبط بشيفت.' });
 
   if (!from || !to || !/^\d{4}-\d{2}-\d{2}$/.test(from) || !/^\d{4}-\d{2}-\d{2}$/.test(to)) {
     return res.status(400).json({ error: 'حدد فترة تاريخ صالحة (من - إلى).' });
@@ -1010,10 +1032,12 @@ router.get('/report/attendance', requireAuth, requireAdmin, async (req, res) => 
 
   const stageSql = stages.length ? ` AND stage IN (${stages.map(()=>'?').join(',')})` : '';
   const idParams = stages.length ? [from, to, ...stages] : [from, to];
+  const shiftSql = isShiftScoped ? ' AND e.shift = ?' : '';
   const empIds = (await db.prepare(`
-    SELECT DISTINCT employee_id FROM stage_daily
-    WHERE entry_date BETWEEN ? AND ?${stageSql}
-  `).all(...idParams)).map(r => r.employee_id);
+    SELECT DISTINCT sd.employee_id FROM stage_daily sd
+    JOIN employees e ON e.id = sd.employee_id
+    WHERE sd.entry_date BETWEEN ? AND ?${stageSql}${shiftSql}
+  `).all(...(isShiftScoped ? [...idParams, supervisorShift] : idParams))).map(r => r.employee_id);
 
   if (!empIds.length) {
     return res.json({ employees: [], total: 0, from, to, stage: stages.length ? stages : '__ALL__' });
@@ -1032,6 +1056,44 @@ router.get('/report/attendance', requireAuth, requireAdmin, async (req, res) => 
 
   const result = await Promise.all(employees.map(async e => ({ ...e, stage_target: stages.length ? (await targetStmt.get(e.id, ...stages, from, to)).t : (await targetStmt.get(e.id, from, to)).t })));
   res.json({ employees: result, total: result.length, from, to, stage: stages.length ? stages : '__ALL__' });
+});
+
+// ---- System Creator: audit logs + banner/theme management ----
+router.get('/audit-logs', requireAuth, requireSystemCreator, async (req, res) => {
+  const limit = Math.min(Math.max(Number(req.query.limit) || 200, 1), 500);
+  const rows = await db.prepare(`
+    SELECT id, actor_id, actor_name, action, entity_type, entity_id, details_json, ip, created_at
+    FROM audit_logs ORDER BY created_at DESC LIMIT ?
+  `).all(limit);
+  res.json({ logs: rows.map(r => ({ ...r, details: r.details_json || {} })) });
+});
+
+router.get('/banner', requireAuth, async (req, res) => {
+  const row = await db.prepare(`SELECT value_json FROM system_settings WHERE key = 'home_banner'`).get();
+  const value = row?.value_json || {};
+  res.json({ banner: value.data || null, filename: value.filename || null, updated_at: value.updated_at || null });
+});
+
+router.put('/banner', requireAuth, requireSystemCreator, async (req, res) => {
+  const { data, filename } = req.body || {};
+  if (!data || typeof data !== 'string' || !/^data:image\/(png|jpe?g|webp);base64,/i.test(data)) {
+    return res.status(400).json({ error: 'ارفع صورة PNG أو JPG أو WEBP صالحة.' });
+  }
+  if (data.length > 7_000_000) return res.status(413).json({ error: 'حجم صورة البانر كبير جدًا. الحد الأقصى حوالي 5MB.' });
+  const payload = JSON.stringify({ data, filename: String(filename || 'banner'), updated_at: new Date().toISOString() });
+  await db.prepare(`
+    INSERT INTO system_settings (key, value_json, updated_by)
+    VALUES ('home_banner', ?::jsonb, ?)
+    ON CONFLICT(key) DO UPDATE SET value_json=excluded.value_json, updated_by=excluded.updated_by, updated_at=CURRENT_TIMESTAMP
+  `).run(payload, Number(req.user.id));
+  await writeAudit(req, 'update_banner', 'system_settings', 'home_banner', { filename: filename || 'banner' });
+  res.json({ ok: true, message: 'تم تحديث صورة البانر.' });
+});
+
+router.delete('/banner', requireAuth, requireSystemCreator, async (req, res) => {
+  await db.prepare(`DELETE FROM system_settings WHERE key = 'home_banner'`).run();
+  await writeAudit(req, 'remove_banner', 'system_settings', 'home_banner', {});
+  res.json({ ok: true, message: 'تم حذف صورة البانر.' });
 });
 
 module.exports = router;

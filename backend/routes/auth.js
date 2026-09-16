@@ -50,8 +50,13 @@ router.post('/login', async (req, res) => {
     return res.status(401).json({ error: 'الرقم التعريفي أو كلمة المرور غير صحيحة' });
   }
 
+  await db.prepare(`INSERT INTO audit_logs
+    (actor_id, actor_name, action, entity_type, entity_id, details_json, ip)
+    VALUES (?, ?, 'login_success', 'auth', ?, ?::jsonb, ?)`)
+    .run(emp.id, emp.name, String(emp.id), JSON.stringify({ role: emp.role }), ip);
+
   const token = jwt.sign(
-    { id: emp.id, role: emp.role, name: emp.name },
+    { id: emp.id, role: emp.role, name: emp.name, shift: emp.shift },
     JWT_SECRET,
     { expiresIn: '8h' }
   );

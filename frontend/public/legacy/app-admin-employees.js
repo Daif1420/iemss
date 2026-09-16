@@ -2,8 +2,10 @@ const token = sessionStorage.getItem('iems_token');
 const userRaw = sessionStorage.getItem('iems_user');
 if (!token || !userRaw) window.location.href = '/index.html';
 const user = JSON.parse(userRaw);
-if (user.role !== 'admin' && user.role !== 'supervisor') window.location.href = '/home.html';
+if (!['system_creator','admin','supervisor'].includes(user.role)) window.location.href = '/home.html';
 const isSupervisor = user.role === 'supervisor';
+const isCreator = user.role === 'system_creator';
+const isAdmin = user.role === 'admin';
 if (isSupervisor && $('employees-page-desc')) $('employees-page-desc').textContent = 'عرض الموظفين وتغيير الصلاحية بين موظف ومشرف فقط.';
 
 const $ = id => document.getElementById(id);
@@ -139,7 +141,7 @@ $('theme-toggle').addEventListener('click', () => {
 updateThemeIcon();
 
 $('chip-name').textContent = user.name;
-$('chip-role').textContent = `ID: ${user.id} · ${isSupervisor ? 'مشرف' : 'مدير النظام'}`;
+$('chip-role').textContent = `ID: ${user.id} · ${isCreator ? 'منشئ النظام' : isSupervisor ? 'مشرف' : 'مدير النظام'}`;
 $('chip-avatar').textContent = (user.name || '?').trim()[0] || '?';
 $('logout-btn').addEventListener('click', () => { sessionStorage.clear(); window.location.href = '/index.html'; });
 
@@ -149,10 +151,14 @@ let sortKey = null;
 let sortDir = 'asc'; // 'asc' | 'desc'
 let selectedIds = new Set();
 
-const ROLE_LABELS = { admin: 'مدير النظام', supervisor: 'مشرف', employee: 'موظف' };
+const ROLE_LABELS = { system_creator: 'منشئ النظام', admin: 'مدير النظام', supervisor: 'مشرف', employee: 'موظف' };
 if ($('filter-role')) $('filter-role').innerHTML = `<option value="__ALL__">الكل</option>${isSupervisor ? '' : '<option value="admin">مدير النظام</option>'}<option value="supervisor">مشرف</option><option value="employee">موظف</option>`;
 function roleOptionsHtml(current) {
-  return Object.entries(ROLE_LABELS).filter(([val]) => !isSupervisor || val !== 'admin').map(([val, label]) =>
+  return Object.entries(ROLE_LABELS).filter(([val]) => {
+    if (isCreator) return true;
+    if (isAdmin) return ['supervisor','employee'].includes(val);
+    return ['supervisor','employee'].includes(val);
+  }).map(([val, label]) =>
     `<option value="${val}" ${val === current ? 'selected' : ''}>${escapeHtml(label)}</option>`).join('');
 }
 
@@ -177,7 +183,7 @@ function renderTable(list) {
       <td>${escapeHtml(e.department || '—')}</td>
       <td>${escapeHtml(e.education || '—')}</td>
       <td>
-        <select class="role-select role-${escapeHtml(e.role || 'employee')}" data-role-for="${escapeHtml(e.id)}" ${(String(e.id) === String(user.id) || e.is_primary_admin) ? `disabled title="${e.is_primary_admin ? 'مدير النظام الأساسي - لا يمكن تغيير صلاحيته' : 'لا يمكنك تغيير صلاحيتك الخاصة'}"` : ''}>
+        <select class="role-select role-${escapeHtml(e.role || 'employee')}" data-role-for="${escapeHtml(e.id)}" ${(String(e.id) === String(user.id) || e.is_primary_admin || (isAdmin && ['admin','system_creator'].includes(e.role))) ? `disabled title="${e.is_primary_admin ? 'الحساب الأعلى محمي' : String(e.id) === String(user.id) ? 'لا يمكنك تغيير صلاحيتك الخاصة' : 'مدير النظام لا يمكنه تعديل صلاحيات الإدارة'}` : ''}>
           ${roleOptionsHtml(e.role || 'employee')}
         </select>
         ${e.is_primary_admin ? '<span class="primary-admin-badge" title="مدير النظام الأساسي">🔒</span>' : ''}
@@ -186,8 +192,8 @@ function renderTable(list) {
       <td class="emp-actions-cell">
         <button class="row-icon-btn info-btn" data-action="view" title="عرض بيانات الموظف كما تظهر له">${miniIcon('view')}</button>
         ${isSupervisor ? '' : `<button class="row-icon-btn" data-action="edit" title="تعديل بيانات الموظف">${miniIcon('edit')}</button>
-        <button class="row-icon-btn" data-action="pw" title="تغيير كلمة المرور">${miniIcon('key')}</button>
-        <button class="row-icon-btn" data-action="reset" title="كلمة مرور افتراضية جديدة">${miniIcon('reset')}</button>
+        ${isCreator ? `<button class="row-icon-btn" data-action="pw" title="تغيير كلمة المرور">${miniIcon('key')}</button>
+        <button class="row-icon-btn" data-action="reset" title="كلمة مرور افتراضية جديدة">${miniIcon('reset')}</button>` : ''}
         <button class="row-icon-btn danger-icon" data-action="delete" title="حذف الموظف">${miniIcon('delete')}</button>`}
       </td>
     </tr>`).join('');

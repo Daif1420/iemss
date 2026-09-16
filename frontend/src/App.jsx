@@ -5,6 +5,8 @@ import AdminEmployees from './pages/AdminEmployees';
 import AdminImport from './pages/AdminImport';
 import AdminManualEntry from './pages/AdminManualEntry';
 import Reports from './pages/Reports';
+import AuditLogs from './pages/AuditLogs';
+import Themes from './pages/Themes';
 
 // Route paths deliberately keep the original ".html" filenames because the
 // legacy Home scripts (app-home.js, app-login.js, app-shell.js, ...) still hardcode redirects
@@ -24,6 +26,8 @@ export default function App() {
         <Route path="/admin-import.html" element={<AdminImport />} />
         <Route path="/admin-manual-entry.html" element={<AdminManualEntry />} />
         <Route path="/reports.html" element={<Reports />} />
+        <Route path="/audit-logs.html" element={<AuditLogs />} />
+        <Route path="/themes.html" element={<Themes />} />
         <Route path="*" element={<Navigate to="/" replace />} />
       </Routes>
     </BrowserRouter>

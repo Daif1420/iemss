@@ -2,7 +2,7 @@ const token = sessionStorage.getItem('iems_token');
 const userRaw = sessionStorage.getItem('iems_user');
 if (!token || !userRaw) window.location.href = '/index.html';
 const user = JSON.parse(userRaw);
-if (user.role !== 'admin') window.location.href = '/home.html';
+if (!['system_creator','admin','supervisor'].includes(user.role)) window.location.href = '/home.html';
 
 const $ = id => document.getElementById(id);
 function authHeaders() { return { Authorization: 'Bearer ' + token, 'Content-Type': 'application/json' }; }
@@ -31,7 +31,7 @@ $('theme-toggle').addEventListener('click', () => {
 updateThemeIcon();
 
 $('chip-name').textContent = user.name;
-$('chip-role').textContent = `ID: ${user.id} · مدير`;
+$('chip-role').textContent = user.role === 'system_creator' ? `ID: ${user.id} · منشئ النظام` : user.role === 'admin' ? `ID: ${user.id} · مدير` : `ID: ${user.id} · مشرف · Shift ${user.shift || '-'}`;
 $('chip-avatar').textContent = (user.name || '?').trim()[0] || '?';
 $('logout-btn').addEventListener('click', () => { sessionStorage.clear(); window.location.href = '/index.html'; });
 
@@ -97,7 +97,11 @@ async function runReport() {
   $('rep-run-btn').innerHTML = '<span class="report-spinner" aria-hidden="true"></span>';
   $('rep-run-btn').setAttribute('aria-label', 'جارٍ إنشاء التقرير');
   try {
-    const q=new URLSearchParams({from,to});stages.forEach(v=>q.append('stage',v));const data = await api(`/api/admin/report/attendance?${q.toString()}`);
+    const q=new URLSearchParams({from,to});
+    stages.forEach(v=>q.append('stage',v));
+    // Supervisors are always scoped to their own shift by the API.
+    if (user.role === 'supervisor') q.set('shift', user.shift || '');
+    const data = await api(`/api/admin/report/attendance?${q.toString()}`);
     lastResult = data;
     renderTable(data.employees);
     const stageLabel = stages.length ? stages.join(' + ') : 'كل المراحل';

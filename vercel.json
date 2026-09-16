@@ -28,6 +28,14 @@
         {
           "source": "/reports.html",
           "destination": "/index.html"
+        },
+        {
+          "source": "/audit-logs.html",
+          "destination": "/index.html"
+        },
+        {
+          "source": "/themes.html",
+          "destination": "/index.html"
         }
       ]
     },
