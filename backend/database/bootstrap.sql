@@ -21,6 +21,7 @@ CREATE TABLE IF NOT EXISTS employees (
 ALTER TABLE employees ADD COLUMN IF NOT EXISTS target_shift TEXT;
 ALTER TABLE employees ADD COLUMN IF NOT EXISTS left_date DATE;
 ALTER TABLE employees ADD COLUMN IF NOT EXISTS departure_reason TEXT;
+ALTER TABLE employees ADD COLUMN IF NOT EXISTS supervisor_shifts TEXT[] DEFAULT ARRAY[]::TEXT[];
 UPDATE employees SET target_shift = CASE
   WHEN UPPER(TRIM(COALESCE(shift,''))) IN ('A','B','C','D') THEN UPPER(TRIM(shift))
   ELSE 'Other'

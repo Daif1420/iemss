@@ -166,6 +166,13 @@ let sortDir = 'asc'; // 'asc' | 'desc'
 let selectedIds = new Set();
 
 const ROLE_LABELS = { system_creator: 'منشئ النظام', admin: 'مدير النظام', supervisor: 'مشرف', employee: 'موظف' };
+const supervisorShiftLabel = e => Array.isArray(e?.supervisor_shifts) && e.supervisor_shifts.length ? ` · ${e.supervisor_shifts.join(' / ')}` : '';
+// On the Employees page, Manager and Supervisor are strictly view-only.
+// Selection and bulk actions are creator-only as well.
+if (!isCreator) {
+  document.querySelectorAll('.select-col').forEach(el => el.style.display='none');
+  if ($('emp-bulk-row')) $('emp-bulk-row').style.display='none';
+}
 if ($('filter-role')) $('filter-role').innerHTML = `<option value="__ALL__">الكل</option>${isSupervisor ? '' : '<option value="admin">مدير النظام</option>'}<option value="supervisor">مشرف</option><option value="employee">موظف</option>`;
 function roleOptionsHtml(current) {
   const allowed = Object.keys(ROLE_LABELS).filter(val => {
@@ -193,14 +200,14 @@ function renderTable(list) {
   if (!list.length) { $('emp-table-body').innerHTML = '<tr><td colspan="10"><div class="empty-state">لا توجد نتائج.</div></td></tr>'; return; }
   $('emp-table-body').innerHTML = list.map(e => `
     <tr data-id="${escapeHtml(e.id)}" class="${e.is_top5 ? 'emp-row-top5' : ''}">
-      <td class="select-col"><input type="checkbox" class="row-select" data-select-for="${escapeHtml(e.id)}" ${selectedIds.has(String(e.id)) ? 'checked' : ''} ${String(e.id) === String(user.id) ? 'disabled' : ''}></td>
+      <td class="select-col" style="${isCreator ? "" : "display:none"}"><input type="checkbox" class="row-select" data-select-for="${escapeHtml(e.id)}" ${selectedIds.has(String(e.id)) ? 'checked' : ''} ${String(e.id) === String(user.id) ? 'disabled' : ''}></td>
       <td>${escapeHtml(e.id)}</td>
       <td class="emp-name-cell">${escapeHtml(e.name)}${e.is_top5 ? '<span class="top5-badge" title="من ضمن أفضل 5 موظفين">🏆 Top 5</span>' : ''}</td>
       <td>${escapeHtml(e.company || '—')}</td>
       <td>${escapeHtml(e.shift || '—')}</td>
       <td>${escapeHtml(e.department || '—')}</td>
       <td>${escapeHtml(e.education || '—')}</td>
-      <td>${isCreator ? `<select class="role-select role-${escapeHtml(e.role || 'employee')}" data-role-for="${escapeHtml(e.id)}" ${(String(e.id) === String(user.id) || e.is_primary_admin) ? 'disabled' : ''}>${roleOptionsHtml(e.role || 'employee')}</select>` : `<span class="role-readonly">${escapeHtml(ROLE_LABELS[e.role || 'employee'] || 'موظف')}</span>`}${e.is_primary_admin ? '<span class="primary-admin-badge">🔒</span>' : ''}</td>
+      <td>${isCreator ? `<select class="role-select role-${escapeHtml(e.role || 'employee')}" data-role-for="${escapeHtml(e.id)}" ${(String(e.id) === String(user.id) || e.is_primary_admin) ? 'disabled' : ''}>${roleOptionsHtml(e.role || 'employee')}</select>` : `<span class="role-readonly">${escapeHtml((ROLE_LABELS[e.role || 'employee'] || 'موظف') + (e.role === 'supervisor' ? supervisorShiftLabel(e) : ''))}</span>`}${e.is_primary_admin ? '<span class="primary-admin-badge">🔒</span>' : ''}</td>
       <td>${statusBadgeHtml(e.status)}</td>
       <td class="emp-actions-cell">
         <button class="row-icon-btn info-btn" data-action="view" title="عرض بيانات الموظف كما تظهر له">${miniIcon('view')}</button>
@@ -293,6 +300,19 @@ async function loadEmployees() {
   try {
     const { employees, total } = await api('/api/admin/employees');
     allEmployees = employees;
+    const params = new URLSearchParams(location.search);
+    const companyParam = params.get('company');
+    const educationParam = params.get('education');
+    const statusParam = params.get('status');
+    if (statusParam && ['active','left','archive'].includes(statusParam)) {
+      allEmployees = allEmployees.filter(e => (e.status || 'active') === statusParam);
+      if ($('filter-status')) $('filter-status').value = statusParam;
+    }
+    if (companyParam) {
+      const wanted = companyParam === 'smart' ? 'SMART' : companyParam === 'bravos' ? 'BRAVOS' : companyParam.toUpperCase();
+      allEmployees = allEmployees.filter(e => String(e.company||'').toUpperCase().includes(wanted) || (companyParam==='smart' && String(e.company||'').toUpperCase()==='SB'));
+    }
+    if (educationParam) allEmployees = allEmployees.filter(e => String(e.education||'') === educationParam);
     $('emp-total').textContent = total ?? employees.filter(e => (e.role || 'employee') === 'employee').length;
     populateFilterOptions();
     renderTable(getFiltered());
@@ -304,21 +324,45 @@ async function loadEmployees() {
 $('emp-search').addEventListener('input', () => renderTable(getFiltered()));
 
 // ---- Role change dropdown ----
+// ---- Role change + supervisor shift assignment ----
+const supervisorShiftsModal = $('supervisor-shifts-modal');
+let pendingRoleChange = null;
+function closeSupervisorShiftModal(){ pendingRoleChange=null; if(supervisorShiftsModal) supervisorShiftsModal.classList.remove('open'); }
+function openSupervisorShiftModal(emp, sel){
+  pendingRoleChange={emp,sel};
+  const selected=Array.isArray(emp?.supervisor_shifts)?emp.supervisor_shifts.map(String):[];
+  document.querySelectorAll('#supervisor-shift-options input').forEach(cb=>cb.checked=selected.includes(cb.value));
+  $('supervisor-shifts-error').style.display='none';
+  supervisorShiftsModal.classList.add('open');
+}
+$('supervisor-shifts-cancel')?.addEventListener('click',closeSupervisorShiftModal);
+$('supervisor-shifts-cancel-2')?.addEventListener('click',closeSupervisorShiftModal);
+$('supervisor-shifts-save')?.addEventListener('click',async()=>{
+  if(!pendingRoleChange) return;
+  const {emp,sel}=pendingRoleChange;
+  const shifts=[...document.querySelectorAll('#supervisor-shift-options input:checked')].map(x=>x.value);
+  if(!shifts.length){$('supervisor-shifts-error').textContent='اختر شيفتًا واحدًا على الأقل.';$('supervisor-shifts-error').style.display='block';return;}
+  try{
+    const data=await api(`/api/admin/employee/${encodeURIComponent(emp.id)}/role`,{method:'PATCH',body:JSON.stringify({role:'supervisor',supervisorShifts:shifts})});
+    emp.role='supervisor'; emp.supervisor_shifts=shifts;
+    sel.value='supervisor'; sel.className='role-select role-supervisor';
+    closeSupervisorShiftModal(); renderTable(getFiltered());
+  }catch(err){$('supervisor-shifts-error').textContent=err.message;$('supervisor-shifts-error').style.display='block'}
+});
+
 $('emp-table-body').addEventListener('change', async (e) => {
   const sel = e.target.closest('select[data-role-for]');
   if (!sel) return;
   const id = sel.dataset.roleFor;
   const emp = allEmployees.find(x => String(x.id) === String(id));
   const prevRole = emp ? emp.role || 'employee' : sel.value;
+  if(sel.value==='supervisor' && prevRole!=='supervisor'){ return openSupervisorShiftModal(emp,sel); }
   try {
-    await api(`/api/admin/employee/${encodeURIComponent(id)}/role`, { method: 'PATCH', body: JSON.stringify({ role: sel.value }) });
-    if (emp) emp.role = sel.value;
-    sel.className = `role-select role-${sel.value}`;
-    $('emp-total').textContent = allEmployees.filter(e2 => (e2.role || 'employee') === 'employee' && (e2.status || 'active') === 'active').length;
-  } catch (err) {
-    sel.value = prevRole;
-    showResult('خطأ', err.message);
-  }
+    await api(`/api/admin/employee/${encodeURIComponent(id)}/role`, { method:'PATCH', body:JSON.stringify({role:sel.value,supervisorShifts:[]}) });
+    if (emp) { emp.role=sel.value; emp.supervisor_shifts=[]; }
+    sel.className=`role-select role-${sel.value}`;
+    $('emp-total').textContent=allEmployees.filter(e2=>(e2.role||'employee')==='employee'&&(e2.status||'active')==='active').length;
+  } catch(err){ sel.value=prevRole; showResult('خطأ',err.message); }
 });
 
 // ---- View-as-employee modal (exactly what the employee sees) ----

@@ -265,9 +265,34 @@ window.__iemsKpi = { svgIcon, kpiLineChart, KPI_TREND_SHAPES, kpiCard };
 function renderKpis(overview) {
   if (user.role !== 'admin' && user.role !== 'system_creator') return;
   const o = overview || {};
-  const cards=[['إجمالي الموظفين',Number(o.total||0),'blue','users','all'],['إجمالي شركة سمارت بيزنس',Number(o.smart||0),'teal','company',null],['إجمالي شركة برافوس',Number(o.bravos||0),'amber','company',null],['إجمالي الطلاب',Number(o.students||0),'purple','student',null],['إجمالي الخريجين',Number(o.graduates||0),'rose','graduate',null],['إجمالي المغادرين',Number(o.leftEmployees||0),'left-kpi','leave','left'],['إجمالي الجدد',Number(o.newEmployees||0),'new-kpi','new','new']];
-  $('kpi-grid').innerHTML=cards.map(([label,val,cls,icon,group],i)=>{const h=kpiCard(label,val,cls,icon,KPI_TREND_SHAPES[i%KPI_TREND_SHAPES.length]);return group?h.replace('<article ',`<article data-kpi-group="${group}" role="button" tabindex="0" `):h}).join('');
-  $('kpi-grid').querySelectorAll('[data-kpi-group]').forEach(c=>{const go=()=>location.href=c.dataset.kpiGroup==='new'?'/employees-new.html':c.dataset.kpiGroup==='left'?'/employees-left.html':'/admin-employees.html';c.onclick=go;c.onkeydown=e=>{if(e.key==='Enter'||e.key===' '){e.preventDefault();go()}}});
+  const cards=[
+    ['إجمالي الموظفين',Number(o.total||0),'blue','users','all'],
+    ['إجمالي شركة سمارت بيزنس',Number(o.smart||0),'teal','company','smart'],
+    ['إجمالي شركة برافوس',Number(o.bravos||0),'amber','company','bravos'],
+    ['إجمالي الطلاب',Number(o.students||0),'purple','student','students'],
+    ['إجمالي الخريجين',Number(o.graduates||0),'rose','graduate','graduates'],
+    ['إجمالي المغادرين',Number(o.leftEmployees||0),'left-kpi','leave','left'],
+    ['إجمالي الجدد',Number(o.newEmployees||0),'new-kpi','new','new']
+  ];
+  $('kpi-grid').innerHTML=cards.map(([label,val,cls,icon,group],i)=>{
+    const h=kpiCard(label,val,cls,icon,KPI_TREND_SHAPES[i%KPI_TREND_SHAPES.length]);
+    return `<div class="kpi-link-wrap" data-kpi-group="${group}" role="button" tabindex="0">${h}</div>`;
+  }).join('');
+  $('kpi-grid').querySelectorAll('[data-kpi-group]').forEach(c=>{
+    const go=()=>{
+      const g=c.dataset.kpiGroup;
+      if(g==='new') return location.href='/employees-new.html';
+      if(g==='left') return location.href='/employees-left.html';
+      const params=new URLSearchParams();
+      params.set('status','active');
+      if(g==='smart') params.set('company','smart');
+      if(g==='bravos') params.set('company','bravos');
+      if(g==='students') params.set('education','طالب');
+      if(g==='graduates') params.set('education','خريج');
+      location.href='/admin-employees.html'+(params.toString()?'?'+params:'');
+    };
+    c.onclick=go;c.onkeydown=e=>{if(e.key==='Enter'||e.key===' '){e.preventDefault();go();}};
+  });
 }
 
 function renderUnauthorizedAbsence(data) {

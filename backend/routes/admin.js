@@ -592,11 +592,11 @@ router.post('/employee/:id/reset-password', requireAuth, requireSystemCreator, a
 router.get('/employees', requireAuth, requireSupervisor, async (req, res) => {
   const scoped = req.user.role === 'supervisor';
   const rows = (await db.prepare(`
-    SELECT id, emp_num, name, education, residence, company, shift, department, role, must_change_password, status, left_date, departure_reason, created_at
+    SELECT id, emp_num, name, education, residence, company, shift, department, role, must_change_password, status, left_date, departure_reason, created_at, supervisor_shifts
     FROM employees
-    WHERE ${scoped ? "role = 'employee' AND shift = ?" : '1=1'}
+    WHERE ${scoped ? "role = 'employee' AND shift = ANY(?::text[])" : '1=1'}
     ORDER BY name
-  `).all(...(scoped ? [String(req.user.shift || '').trim()] : [])));
+  `).all(...(scoped ? [Array.isArray(req.user.supervisorShifts)&&req.user.supervisorShifts.length ? req.user.supervisorShifts : [String(req.user.shift || '').trim()]] : [])));
   const total = rows.filter(r => r.role === 'employee' && (r.status || 'active') === 'active').length;
   const primaryAdminId = await getPrimaryAdminId();
 
@@ -667,9 +667,16 @@ router.patch('/employee/:id/role', requireAuth, requireSystemCreator, async (req
     }
   }
   // Creator has full role-management authority except changing their own role.
-  await db.prepare('UPDATE employees SET role = ? WHERE id = ?').run(role, targetId);
+  let supervisorShifts = null;
+  if (role === 'supervisor') {
+    const raw = Array.isArray(req.body?.supervisorShifts) ? req.body.supervisorShifts : [];
+    supervisorShifts = [...new Set(raw.map(v => String(v || '').trim().toUpperCase()).filter(v => ['A','B','C','D','OTHER'].includes(v)))];
+    if (!supervisorShifts.length) return res.status(400).json({ error: 'اختر شيفتًا واحدًا على الأقل للمشرف.' });
+  }
+  if (role !== 'supervisor') supervisorShifts = [];
+  await db.prepare('UPDATE employees SET role = ?, supervisor_shifts = ?::text[] WHERE id = ?').run(role, supervisorShifts, targetId);
   await writeAudit(req, 'change_role', 'employee', targetId, { from: target.role, to: role });
-  res.json({ ok: true, message: 'تم تحديث الصلاحية بنجاح.', role });
+  res.json({ ok: true, message: 'تم تحديث الصلاحية بنجاح.', role, supervisorShifts: supervisorShifts || [] });
 });
 
 // Company-wide overview stats for the admin dashboard
@@ -723,7 +730,11 @@ router.get('/overview', requireAuth, requireAdmin, async (req, res) => {
   const graduates = await count(` AND e.education = 'خريج'`);
   const now = new Date();
   const defaultFrom = `${now.getUTCFullYear()}-${String(now.getUTCMonth()+1).padStart(2,'0')}-01`;
-  const np=[]; let nw=''; if(shift){nw+=' AND e.shift = ?';np.push(shift)} if(from){nw+=' AND e.created_at::date >= ?';np.push(from)} else {nw+=' AND e.created_at::date >= ?';np.push(defaultFrom)} if(to){nw+=' AND e.created_at::date <= ?';np.push(to)}
+  const np=[]; let nw=''; if(shift){nw+=' AND e.shift = ?';np.push(shift)}
+  // A "new employee" means an employee whose record was created for the first
+  // time in IEMS. Updating/importing the same ID later does not make them new.
+  if(from){nw+=' AND e.created_at::date >= ?';np.push(from)} else {nw+=' AND e.created_at::date >= ?';np.push(defaultFrom)}
+  if(to){nw+=' AND e.created_at::date <= ?';np.push(to)}
   const newEmployees=Number((await db.prepare(`SELECT COUNT(*) c FROM employees e WHERE e.role='employee'${nw}`).get(...np)).c||0);
   const lp=[]; let lw=''; if(shift){lw+=' AND e.shift = ?';lp.push(shift)} if(from){lw+=' AND e.left_date >= ?';lp.push(from)} if(to){lw+=' AND e.left_date <= ?';lp.push(to)}
   const leftEmployees=Number((await db.prepare(`SELECT COUNT(*) c FROM employees e WHERE e.role='employee' AND COALESCE(e.status,'active')='left'${lw}`).get(...lp)).c||0);
@@ -818,7 +829,7 @@ router.patch('/employee/:id', requireAuth, requireSystemCreator, async (req, res
 const DEPARTURE_REASONS=['استقالة','كثرة الغياب عن العمل','ضعف الأداء / عدم تحقيق التارجت','مخالفة لوائح العمل','مخالفة إدارية / سلوكية','ترك العمل بدون إخطار','خدمة الوطن (الجيش)'];
 router.patch('/employee/:id/departure',requireAuth,requireSystemCreator,async(req,res)=>{const id=Number(req.params.id);const emp=await db.prepare("SELECT id,role FROM employees WHERE id=?").get(id);if(!emp||emp.role!=='employee')return res.status(404).json({error:'الموظف غير موجود.'});const d=String(req.body?.leftDate||''),r=String(req.body?.reason||'');if(!/^\d{4}-\d{2}-\d{2}$/.test(d)||!DEPARTURE_REASONS.includes(r))return res.status(400).json({error:'بيانات المغادرة غير صالحة.'});await db.prepare("UPDATE employees SET status='left',left_date=?,departure_reason=? WHERE id=?").run(d,r,id);await writeAudit(req,'mark_employee_left','employee',id,{left_date:d,departure_reason:r});res.json({ok:true})});
 router.patch('/employee/:id/reactivate',requireAuth,requireSystemCreator,async(req,res)=>{const id=Number(req.params.id);await db.prepare("UPDATE employees SET status='active',left_date=NULL,departure_reason=NULL WHERE id=? AND role='employee'").run(id);await writeAudit(req,'reactivate_employee','employee',id,{});res.json({ok:true})});
-router.get('/employee-group/:group',requireAuth,requireSupervisor,async(req,res)=>{const g=String(req.params.group||'all');if(!['all','current','left','archive'].includes(g))return res.status(400).json({error:'تصنيف غير صالح.'});const sc=req.user.role==='supervisor',ps=sc?[req.user.shift||'']:[],sq=sc?' AND e.shift=?':'';let st='';if(g==='current')st=" AND COALESCE(e.status,'active')='active'";if(g==='left')st=" AND e.status='left'";if(g==='archive')st=" AND e.status='archive'";const rows=await db.prepare(`SELECT id,emp_num,name,education,company,shift,department,status,left_date,departure_reason,created_at FROM employees e WHERE e.role='employee'${sq}${st} ORDER BY name`).all(...ps);res.json({employees:rows,total:rows.length,group:g})});
+router.get('/employee-group/:group',requireAuth,requireSupervisor,async(req,res)=>{const g=String(req.params.group||'all');if(!['all','current','left','archive'].includes(g))return res.status(400).json({error:'تصنيف غير صالح.'});const sc=req.user.role==='supervisor', supervisorShifts=Array.isArray(req.user.supervisorShifts)&&req.user.supervisorShifts.length?req.user.supervisorShifts:[req.user.shift||''], ps=sc?supervisorShifts:[], sq=sc?` AND e.shift = ANY(?::text[])`:'';let st='';if(g==='current')st=" AND COALESCE(e.status,'active')='active'";if(g==='left')st=" AND e.status='left'";if(g==='archive')st=" AND e.status='archive'";const rows=await db.prepare(`SELECT id,emp_num,name,education,company,shift,department,status,left_date,departure_reason,created_at,supervisor_shifts FROM employees e WHERE e.role='employee'${sq}${st} ORDER BY name`).all(...ps);res.json({employees:rows,total:rows.length,group:g})});
 // ---- Manual entry (data-entry screen, alternative to uploading the Master Excel sheet) ----
 
 // Reference data for the manual-entry screen: known employees, stage names

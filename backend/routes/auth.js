@@ -56,7 +56,7 @@ router.post('/login', async (req, res) => {
     .run(emp.id, emp.name, String(emp.id), JSON.stringify({ role: emp.role }), ip);
 
   const token = jwt.sign(
-    { id: emp.id, role: emp.role, name: emp.name, shift: emp.shift },
+    { id: emp.id, role: emp.role, name: emp.name, shift: emp.shift, supervisorShifts: emp.supervisor_shifts || [] },
     JWT_SECRET,
     { expiresIn: '8h' }
   );
@@ -68,6 +68,7 @@ router.post('/login', async (req, res) => {
       name: emp.name,
       role: emp.role,
       shift: emp.shift,
+      supervisorShifts: emp.supervisor_shifts || [],
       company: emp.company,
       department: emp.department,
       must_change_password: !!emp.must_change_password,
@@ -76,7 +77,7 @@ router.post('/login', async (req, res) => {
 });
 
 router.get('/me', requireAuth, async (req, res) => {
-  const emp = await db.prepare('SELECT id, name, role, shift, company, department FROM employees WHERE id = ?')
+  const emp = await db.prepare('SELECT id, name, role, shift, supervisor_shifts, company, department FROM employees WHERE id = ?')
     .get(req.user.id);
   if (!emp) return res.status(404).json({ error: 'غير موجود' });
   res.json({ user: emp });

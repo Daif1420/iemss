@@ -71,7 +71,37 @@
     a.setAttribute('aria-current', active ? 'page' : 'false');
   });
 
-  // ---- Single permission table for the whole app ----
+  // Employees is a section, not a single destination. Convert the nav item into
+// an icon/text trigger with a compact dropdown containing the employee views.
+(() => {
+  const link = document.getElementById('nav-employees');
+  if (!link || link.dataset.employeeMenuReady === '1') return;
+  link.dataset.employeeMenuReady = '1';
+  const wrap = document.createElement('div');
+  wrap.className = 'employee-nav-wrap';
+  link.parentNode.insertBefore(wrap, link);
+  wrap.appendChild(link);
+  link.href = '#';
+  link.setAttribute('aria-haspopup','menu');
+  link.setAttribute('aria-expanded','false');
+  const menu = document.createElement('div');
+  menu.className = 'employee-nav-menu';
+  menu.innerHTML = `
+    <a href="/admin-employees.html"><span class="menu-icon">◉</span><span>كل الموظفين</span></a>
+    <a href="/employees-current.html"><span class="menu-icon">✓</span><span>الموظفون الحاليون</span></a>
+    <a href="/employees-left.html"><span class="menu-icon">↗</span><span>الموظفون المغادرون</span></a>
+    <a href="/employees-new.html"><span class="menu-icon">+</span><span>الموظفون الجدد</span></a>`;
+  wrap.appendChild(menu);
+  const close = () => { menu.classList.remove('open'); link.setAttribute('aria-expanded','false'); };
+  link.addEventListener('click', e => { e.preventDefault(); const open=menu.classList.toggle('open'); link.setAttribute('aria-expanded',String(open)); });
+  document.addEventListener('click', e => { if(!wrap.contains(e.target)) close(); });
+  menu.querySelectorAll('a').forEach(a => {
+    if (a.getAttribute('href') === location.pathname) a.classList.add('active');
+    a.addEventListener('click', close);
+  });
+})();
+
+// ---- Single permission table for the whole app ----
   // This must match the guard at the top of each page script AND the role
   // middleware on the APIs that page calls. Previously three different files
   // disagreed (app-home.js showed Reports/Manual Entry to supervisors,

@@ -472,7 +472,7 @@
 /* KPI cards: vertically spaced, never visually stuck together */
 .kpi-grid,.attendance-kpis,.unified-attendance-kpis{
   display:grid!important;
-  grid-template-columns:repeat(5,minmax(0,1fr));
+  grid-template-columns:repeat(3,minmax(0,1fr));
   gap:18px!important;
   align-items:stretch;
   margin:18px 0 24px;
@@ -641,3 +641,9 @@ html[data-theme="dark"] .info-item.rank-badge-item{background:linear-gradient(13
 
 .system-banner-wrap{margin:0 0 22px;border-radius:18px;overflow:hidden;background:var(--panel,#fff);box-shadow:0 10px 30px rgba(0,0,0,.08)}
 .system-banner{display:block;width:100%;height:auto;max-height:none;object-fit:contain;object-position:center;background:var(--panel,#fff)}
+
+.kpi-link-wrap{min-width:0;cursor:pointer}
+.kpi-link-wrap .kpi-card2{height:100%}
+.kpi-link-wrap:focus-visible{outline:2px solid var(--primary);outline-offset:4px;border-radius:18px}
+@media(max-width:900px){.kpi-grid{grid-template-columns:repeat(2,minmax(0,1fr))!important}}
+@media(max-width:560px){.kpi-grid{grid-template-columns:1fr!important}}

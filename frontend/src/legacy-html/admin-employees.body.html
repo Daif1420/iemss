@@ -139,6 +139,21 @@
 </div>
 
 <!-- Departure modal --><div class="modal-overlay" id="departure-modal"><div class="modal-card"><h3>تسجيل مغادرة الموظف</h3><div class="field"><label for="departure-date">تاريخ المغادرة</label><input type="date" id="departure-date"></div><div class="field"><label for="departure-reason">سبب المغادرة</label><select id="departure-reason"><option value="">اختر السبب</option><option>استقالة</option><option>كثرة الغياب عن العمل</option><option>ضعف الأداء / عدم تحقيق التارجت</option><option>مخالفة لوائح العمل</option><option>مخالفة إدارية / سلوكية</option><option>ترك العمل بدون إخطار</option><option>خدمة الوطن (الجيش)</option></select></div><div class="modal-error" id="departure-error"></div><div class="modal-actions"><button class="cancel" id="departure-cancel">إلغاء</button><button class="save" id="departure-save">حفظ</button></div></div></div>
+<!-- Supervisor shift assignment -->
+<div class="modal-overlay" id="supervisor-shifts-modal">
+  <div class="modal-card modal-card-wide">
+    <div class="modal-card-head"><div><h3>تحديد شيفتات المشرف</h3><p class="muted">اختر الشيفت أو الشيفتات التي يستطيع المشرف مشاهدة وإدارة بياناتها.</p></div><button class="modal-close" id="supervisor-shifts-cancel" aria-label="إغلاق">×</button></div>
+    <div class="supervisor-shift-options" id="supervisor-shift-options">
+      <label><input type="checkbox" value="A"> <span>Shift A</span></label>
+      <label><input type="checkbox" value="B"> <span>Shift B</span></label>
+      <label><input type="checkbox" value="C"> <span>Shift C</span></label>
+      <label><input type="checkbox" value="D"> <span>Shift D</span></label>
+      <label><input type="checkbox" value="OTHER"> <span>Other</span></label>
+    </div>
+    <div class="modal-error" id="supervisor-shifts-error"></div>
+    <div class="modal-actions"><button class="cancel" id="supervisor-shifts-cancel-2">إلغاء</button><button class="save" id="supervisor-shifts-save">حفظ الصلاحية</button></div>
+  </div>
+</div>
 <!-- Result banner for generated passwords -->
 <div class="modal-overlay" id="result-modal">
   <div class="modal-card">
