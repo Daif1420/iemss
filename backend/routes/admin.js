@@ -645,6 +645,10 @@ router.patch('/employee/:id/role', requireAuth, requireSupervisor, async (req, r
 
   const target = (await db.prepare('SELECT id, role FROM employees WHERE id = ?').get(targetId));
   if (!target) return res.status(404).json({ error: 'الموظف غير موجود.' });
+  const primaryAdminId = await getPrimaryAdminId();
+  if (targetId === primaryAdminId && role !== target.role) {
+    return res.status(403).json({ error: 'حساب مدير النظام الأساسي محمي ولا يمكن تغيير صلاحيته.' });
+  }
 
   // Supervisor: employee <-> supervisor only.
   if (req.user.role === 'supervisor' && (role === 'admin' || role === 'system_creator' || target.role === 'admin' || target.role === 'system_creator')) {

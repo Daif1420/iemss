@@ -1,14 +1,17 @@
+const $ = id => document.getElementById(id);
 const token = sessionStorage.getItem('iems_token');
 const userRaw = sessionStorage.getItem('iems_user');
-if (!token || !userRaw) window.location.href = '/index.html';
-const user = JSON.parse(userRaw);
-if (!['system_creator','admin','supervisor'].includes(user.role)) window.location.href = '/home.html';
+let user = null;
+try { user = userRaw ? JSON.parse(userRaw) : null; } catch (_) {}
+user = user || {};
+if (!token || !user.role) window.location.href = '/index.html';
+if (!['system_creator','admin','supervisor'].includes(user?.role)) window.location.href = '/home.html';
 const isSupervisor = user.role === 'supervisor';
 const isCreator = user.role === 'system_creator';
 const isAdmin = user.role === 'admin';
-if (isSupervisor && $('employees-page-desc')) $('employees-page-desc').textContent = 'عرض الموظفين وتغيير الصلاحية بين موظف ومشرف فقط.';
-
-const $ = id => document.getElementById(id);
+if (isSupervisor && $('employees-page-desc')) {
+  $('employees-page-desc').textContent = 'عرض الموظفين وتغيير الصلاحية بين موظف ومشرف فقط.';
+}
 function authHeaders() { return { Authorization: 'Bearer ' + token, 'Content-Type': 'application/json' }; }
 async function api(path, opts = {}) {
   const res = await fetch(path, { ...opts, headers: { ...authHeaders(), ...(opts.headers || {}) } });
@@ -154,11 +157,15 @@ let selectedIds = new Set();
 const ROLE_LABELS = { system_creator: 'منشئ النظام', admin: 'مدير النظام', supervisor: 'مشرف', employee: 'موظف' };
 if ($('filter-role')) $('filter-role').innerHTML = `<option value="__ALL__">الكل</option>${isSupervisor ? '' : '<option value="admin">مدير النظام</option>'}<option value="supervisor">مشرف</option><option value="employee">موظف</option>`;
 function roleOptionsHtml(current) {
-  return Object.entries(ROLE_LABELS).filter(([val]) => {
+  const allowed = Object.keys(ROLE_LABELS).filter(val => {
     if (isCreator) return true;
-    if (isAdmin) return ['supervisor','employee'].includes(val);
-    return ['supervisor','employee'].includes(val);
-  }).map(([val, label]) =>
+    return ['supervisor', 'employee'].includes(val);
+  });
+  // Keep a protected account's real role visible even when the select is
+  // disabled. Otherwise an admin account was rendered as "مشرف" although
+  // the backend still treated it as an admin.
+  if (current && !allowed.includes(current)) allowed.unshift(current);
+  return allowed.map(val => [val, ROLE_LABELS[val]]).map(([val, label]) =>
     `<option value="${val}" ${val === current ? 'selected' : ''}>${escapeHtml(label)}</option>`).join('');
 }
 

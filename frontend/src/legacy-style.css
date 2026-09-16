@@ -57,11 +57,13 @@
 /* Total employees badge */
 .emp-total-badge{font-size:12px;color:var(--text);font-weight:900;background:var(--soft);border:1px solid var(--line);border-radius:9px;padding:6px 12px;margin-inline-end:10px}
 
-/* Role select dropdown in the employees table */
-.role-select{padding:6px 8px;border-radius:8px;border:1px solid var(--line);background:var(--panel);color:var(--text);font-size:11.5px;font-weight:800;cursor:pointer}
-.role-select.role-admin{border-color:var(--danger);color:var(--danger)}
-.role-select.role-supervisor{border-color:#d9a441;color:#d9a441}
-.role-select.role-employee{border-color:var(--line)}
+/* Permission select: one semantic palette in light and dark themes. */
+.role-select{padding:6px 8px;border-radius:8px;border:1px solid var(--line);background:var(--panel);color:var(--text);font-size:11.5px;font-weight:800;cursor:pointer;color-scheme:light dark}
+.role-select.role-system_creator{border-color:var(--role-creator);color:var(--role-creator);background:color-mix(in srgb,var(--role-creator) 8%,var(--panel))}
+.role-select.role-admin{border-color:var(--danger);color:var(--danger);background:color-mix(in srgb,var(--danger) 8%,var(--panel))}
+.role-select.role-supervisor{border-color:var(--warning);color:var(--warning);background:color-mix(in srgb,var(--warning) 9%,var(--panel))}
+.role-select.role-employee{border-color:var(--line);color:var(--muted)}
+.role-select:disabled{cursor:not-allowed;opacity:.92}
 
 .my-rank-banner{background:linear-gradient(135deg,rgba(245,158,11,.14),rgba(245,158,11,.05));border:1px solid rgba(245,158,11,.3);color:var(--warning);padding:13px 16px;border-radius:14px;font-size:12px;font-weight:800;margin-bottom:18px;display:flex;flex-wrap:wrap;gap:8px 18px;align-items:center}
 .welcome-message{background:linear-gradient(135deg,rgba(59,130,246,.16),rgba(59,130,246,.04));border:1px solid rgba(59,130,246,.3);color:var(--text);padding:14px 18px;border-radius:14px;font-size:13px;font-weight:700;margin-bottom:18px}
@@ -745,6 +747,7 @@ body,input,select,button,textarea{font-family:'Cairo',sans-serif}
   --success:#2E9A5C;
   --warning:#D08A2E;
   --danger:#C6473F;
+  --role-creator:#044B8C;
 
   /* Table language — grid-based, like a spreadsheet */
   --tbl-head:#1D2730;
@@ -793,6 +796,7 @@ body,input,select,button,textarea{font-family:'Cairo',sans-serif}
   --soft:#0B0B0B;
   --hover:rgba(255,255,255,.045);
   --shadow:0 14px 34px rgba(0,0,0,.75);
+  --role-creator:#69B0FF;
 
   --tbl-head:#141414;
   --tbl-head-text:#EDF2F9;
