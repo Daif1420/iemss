@@ -6,7 +6,7 @@ const router = express.Router();
 
 
 function canAccess(req, targetId) {
-  return (req.user.role === 'admin' || req.user.role === 'system_creator') || Number(req.user.id) === Number(targetId);
+  return (req.user.role === 'admin' || req.user.role === 'system_creator' || req.user.role === 'supervisor') || Number(req.user.id) === Number(targetId);
 }
 
 function normalizeDate(value) {
@@ -270,6 +270,7 @@ router.get('/:id', requireAuth, async (req, res) => {
     FROM employees WHERE id = ? AND role = 'employee'
   `).get(targetId));
   if (!emp) return res.status(404).json({ error: 'الموظف غير موجود' });
+  if (req.user.role === 'supervisor' && String(emp.shift || '') !== String(req.user.shift || '')) return res.status(403).json({ error: 'يمكن للمشرف عرض موظفي الشيفت الخاص به فقط.' });
 
   const { from, to, stage, month } = req.query;
   const summaryFields = `total_achievement, total_target, percentage, bonus_tier,

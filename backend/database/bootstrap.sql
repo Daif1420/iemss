@@ -12,11 +12,15 @@ CREATE TABLE IF NOT EXISTS employees (
   role TEXT NOT NULL DEFAULT 'employee',
   must_change_password BOOLEAN NOT NULL DEFAULT TRUE,
   status TEXT NOT NULL DEFAULT 'active',
-  created_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP
+  created_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP,
+  left_date DATE,
+  departure_reason TEXT
 );
 
 -- Backward-compatible migration for existing PostgreSQL databases.
 ALTER TABLE employees ADD COLUMN IF NOT EXISTS target_shift TEXT;
+ALTER TABLE employees ADD COLUMN IF NOT EXISTS left_date DATE;
+ALTER TABLE employees ADD COLUMN IF NOT EXISTS departure_reason TEXT;
 UPDATE employees SET target_shift = CASE
   WHEN UPPER(TRIM(COALESCE(shift,''))) IN ('A','B','C','D') THEN UPPER(TRIM(shift))
   ELSE 'Other'

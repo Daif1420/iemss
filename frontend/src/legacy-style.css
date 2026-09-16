@@ -1039,3 +1039,5 @@ html[data-theme="dark"] .glass{background:rgba(14,20,30,.82);box-shadow:0 26px 7
 #my-account-error.error{display:block}
 .import-history-table td,.import-history-table th{white-space:nowrap}
 @media(max-width:680px){.hero #my-account-btn{align-self:flex-start;margin-top:8px}.import-history-table{font-size:11px}}
+
+.kpi-grid .kpi-card2[data-kpi-group]{cursor:pointer}.kpi-card2.left-kpi{--accent:#C1554F!important}.kpi-card2.new-kpi{--accent:#3C9A63!important}@media(min-width:761px){.kpi-grid{grid-template-columns:repeat(3,minmax(0,1fr))!important}}

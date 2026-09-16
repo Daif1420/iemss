@@ -12,7 +12,9 @@ CREATE TABLE IF NOT EXISTS employees (
   role TEXT NOT NULL DEFAULT 'employee',
   must_change_password BOOLEAN NOT NULL DEFAULT TRUE,
   status TEXT NOT NULL DEFAULT 'active',
-  created_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP
+  created_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP,
+  left_date DATE,
+  departure_reason TEXT
 );
 
 CREATE TABLE IF NOT EXISTS employee_summary (

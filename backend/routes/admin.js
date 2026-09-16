@@ -452,7 +452,7 @@ router.post('/import-master', requireAuth, requireUploader, async (req, res) => 
 
       const setStatusTx = db.transaction(async () => {
         if (activeIds.length) await db.query("UPDATE employees SET status = 'active' WHERE id = ANY($1::int[])", [activeIds]);
-        if (leftIds.length) await db.query("UPDATE employees SET status = 'left' WHERE id = ANY($1::int[])", [leftIds]);
+        if (leftIds.length) await db.query("UPDATE employees SET status = 'left', left_date = COALESCE(left_date, CURRENT_DATE), departure_reason = COALESCE(NULLIF(departure_reason,''), 'غير محدد') WHERE id = ANY($1::int[])", [leftIds]);
         if (archiveIds.length) await db.query("UPDATE employees SET status = 'archive' WHERE id = ANY($1::int[])", [archiveIds]);
       });
       await setStatusTx();
@@ -545,7 +545,7 @@ router.patch('/me/profile', requireAuth, async (req, res) => {
 });
 
 // Delete an employee (and their daily records / summary via ON DELETE CASCADE)
-router.delete('/employee/:id', requireAuth, requireAdmin, async (req, res) => {
+router.delete('/employee/:id', requireAuth, requireSystemCreator, async (req, res) => {
   const targetId = Number(req.params.id);
   if (!Number.isInteger(targetId)) return res.status(400).json({ error: 'رقم موظف غير صالح.' });
 
@@ -592,7 +592,7 @@ router.post('/employee/:id/reset-password', requireAuth, requireSystemCreator, a
 router.get('/employees', requireAuth, requireSupervisor, async (req, res) => {
   const scoped = req.user.role === 'supervisor';
   const rows = (await db.prepare(`
-    SELECT id, emp_num, name, education, residence, company, shift, department, role, must_change_password, status
+    SELECT id, emp_num, name, education, residence, company, shift, department, role, must_change_password, status, left_date, departure_reason, created_at
     FROM employees
     WHERE ${scoped ? "role = 'employee' AND shift = ?" : '1=1'}
     ORDER BY name
@@ -631,7 +631,7 @@ async function getPrimaryAdminId() {
   return row ? row.id : null;
 }
 
-router.patch('/employee/:id/role', requireAuth, requireSupervisor, async (req, res) => {
+router.patch('/employee/:id/role', requireAuth, requireSystemCreator, async (req, res) => {
   const targetId = Number(req.params.id);
   if (!Number.isInteger(targetId)) return res.status(400).json({ error: 'رقم موظف غير صالح.' });
 
@@ -721,8 +721,13 @@ router.get('/overview', requireAuth, requireAdmin, async (req, res) => {
   const bravos = await count(` AND UPPER(e.company) LIKE '%BRAVOS%'`);
   const students = await count(` AND e.education = 'طالب'`);
   const graduates = await count(` AND e.education = 'خريج'`);
-
-  res.json({ total, smart, bravos, students, graduates, other: Math.max(total - smart - bravos, 0) });
+  const now = new Date();
+  const defaultFrom = `${now.getUTCFullYear()}-${String(now.getUTCMonth()+1).padStart(2,'0')}-01`;
+  const np=[]; let nw=''; if(shift){nw+=' AND e.shift = ?';np.push(shift)} if(from){nw+=' AND e.created_at::date >= ?';np.push(from)} else {nw+=' AND e.created_at::date >= ?';np.push(defaultFrom)} if(to){nw+=' AND e.created_at::date <= ?';np.push(to)}
+  const newEmployees=Number((await db.prepare(`SELECT COUNT(*) c FROM employees e WHERE e.role='employee'${nw}`).get(...np)).c||0);
+  const lp=[]; let lw=''; if(shift){lw+=' AND e.shift = ?';lp.push(shift)} if(from){lw+=' AND e.left_date >= ?';lp.push(from)} if(to){lw+=' AND e.left_date <= ?';lp.push(to)}
+  const leftEmployees=Number((await db.prepare(`SELECT COUNT(*) c FROM employees e WHERE e.role='employee' AND COALESCE(e.status,'active')='left'${lw}`).get(...lp)).c||0);
+  res.json({ total, smart, bravos, students, graduates, other: Math.max(total-smart-bravos,0), newEmployees, leftEmployees });
 });;
 
 // Reset an employee's password back to the shared company default
@@ -747,7 +752,7 @@ router.post('/employee/:id/reset-default', requireAuth, requireSystemCreator, as
 // Update an employee's ID and/or name. Changing the ID is done inside a
 // transaction with foreign-key checks briefly relaxed so related rows
 // (summary, daily records, login audit) move over atomically.
-router.patch('/employee/:id', requireAuth, requireAdmin, async (req, res) => {
+router.patch('/employee/:id', requireAuth, requireSystemCreator, async (req, res) => {
   const targetId = Number(req.params.id);
   if (!Number.isInteger(targetId)) return res.status(400).json({ error: 'رقم موظف غير صالح.' });
 
@@ -809,6 +814,11 @@ router.patch('/employee/:id', requireAuth, requireAdmin, async (req, res) => {
   res.json({ ok: true, employee: updated });
 });
 
+// ---- Employee departure management (System Creator only) ----
+const DEPARTURE_REASONS=['استقالة','كثرة الغياب عن العمل','ضعف الأداء / عدم تحقيق التارجت','مخالفة لوائح العمل','مخالفة إدارية / سلوكية','ترك العمل بدون إخطار','خدمة الوطن (الجيش)'];
+router.patch('/employee/:id/departure',requireAuth,requireSystemCreator,async(req,res)=>{const id=Number(req.params.id);const emp=await db.prepare("SELECT id,role FROM employees WHERE id=?").get(id);if(!emp||emp.role!=='employee')return res.status(404).json({error:'الموظف غير موجود.'});const d=String(req.body?.leftDate||''),r=String(req.body?.reason||'');if(!/^\d{4}-\d{2}-\d{2}$/.test(d)||!DEPARTURE_REASONS.includes(r))return res.status(400).json({error:'بيانات المغادرة غير صالحة.'});await db.prepare("UPDATE employees SET status='left',left_date=?,departure_reason=? WHERE id=?").run(d,r,id);await writeAudit(req,'mark_employee_left','employee',id,{left_date:d,departure_reason:r});res.json({ok:true})});
+router.patch('/employee/:id/reactivate',requireAuth,requireSystemCreator,async(req,res)=>{const id=Number(req.params.id);await db.prepare("UPDATE employees SET status='active',left_date=NULL,departure_reason=NULL WHERE id=? AND role='employee'").run(id);await writeAudit(req,'reactivate_employee','employee',id,{});res.json({ok:true})});
+router.get('/employee-group/:group',requireAuth,requireSupervisor,async(req,res)=>{const g=String(req.params.group||'all');if(!['all','current','left','archive'].includes(g))return res.status(400).json({error:'تصنيف غير صالح.'});const sc=req.user.role==='supervisor',ps=sc?[req.user.shift||'']:[],sq=sc?' AND e.shift=?':'';let st='';if(g==='current')st=" AND COALESCE(e.status,'active')='active'";if(g==='left')st=" AND e.status='left'";if(g==='archive')st=" AND e.status='archive'";const rows=await db.prepare(`SELECT id,emp_num,name,education,company,shift,department,status,left_date,departure_reason,created_at FROM employees e WHERE e.role='employee'${sq}${st} ORDER BY name`).all(...ps);res.json({employees:rows,total:rows.length,group:g})});
 // ---- Manual entry (data-entry screen, alternative to uploading the Master Excel sheet) ----
 
 // Reference data for the manual-entry screen: known employees, stage names

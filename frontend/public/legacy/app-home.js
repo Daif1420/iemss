@@ -265,16 +265,9 @@ window.__iemsKpi = { svgIcon, kpiLineChart, KPI_TREND_SHAPES, kpiCard };
 function renderKpis(overview) {
   if (user.role !== 'admin' && user.role !== 'system_creator') return;
   const o = overview || {};
-  const cards = [
-    ['إجمالي الموظفين', Number(o.total || 0), 'blue', 'users'],
-    ['إجمالي شركة سمارت بيزنس', Number(o.smart || 0), 'teal', 'company'],
-    ['إجمالي شركة برافوس', Number(o.bravos || 0), 'amber', 'company'],
-    ['إجمالي الطلاب', Number(o.students || 0), 'purple', 'student'],
-    ['إجمالي الخريجين', Number(o.graduates || 0), 'rose', 'graduate']
-  ];
-  $('kpi-grid').innerHTML = cards.map(([label, val, cls, icon], i) =>
-    kpiCard(label, val, cls, icon, KPI_TREND_SHAPES[i % KPI_TREND_SHAPES.length])
-  ).join('');
+  const cards=[['إجمالي الموظفين',Number(o.total||0),'blue','users','all'],['إجمالي شركة سمارت بيزنس',Number(o.smart||0),'teal','company',null],['إجمالي شركة برافوس',Number(o.bravos||0),'amber','company',null],['إجمالي الطلاب',Number(o.students||0),'purple','student',null],['إجمالي الخريجين',Number(o.graduates||0),'rose','graduate',null],['إجمالي المغادرين',Number(o.leftEmployees||0),'left-kpi','leave','left'],['إجمالي الجدد',Number(o.newEmployees||0),'new-kpi','new','new']];
+  $('kpi-grid').innerHTML=cards.map(([label,val,cls,icon,group],i)=>{const h=kpiCard(label,val,cls,icon,KPI_TREND_SHAPES[i%KPI_TREND_SHAPES.length]);return group?h.replace('<article ',`<article data-kpi-group="${group}" role="button" tabindex="0" `):h}).join('');
+  $('kpi-grid').querySelectorAll('[data-kpi-group]').forEach(c=>{const go=()=>location.href=c.dataset.kpiGroup==='new'?'/employees-new.html':c.dataset.kpiGroup==='left'?'/employees-left.html':'/admin-employees.html';c.onclick=go;c.onkeydown=e=>{if(e.key==='Enter'||e.key===' '){e.preventDefault();go()}}});
 }
 
 function renderUnauthorizedAbsence(data) {

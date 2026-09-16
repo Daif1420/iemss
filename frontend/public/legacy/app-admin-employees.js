@@ -12,7 +12,7 @@ const isSupervisor = user.role === 'supervisor';
 const isCreator = user.role === 'system_creator';
 const isAdmin = user.role === 'admin';
 if (isSupervisor && $('employees-page-desc')) {
-  $('employees-page-desc').textContent = 'عرض الموظفين وتغيير الصلاحية بين موظف ومشرف فقط.';
+  $('employees-page-desc').textContent = 'عرض بيانات الموظفين فقط. لا تتوفر صلاحيات تعديل أو حذف أو تغيير الصلاحيات.';
 }
 function authHeaders() { return { Authorization: 'Bearer ' + token, 'Content-Type': 'application/json' }; }
 async function api(path, opts = {}) {
@@ -200,19 +200,11 @@ function renderTable(list) {
       <td>${escapeHtml(e.shift || '—')}</td>
       <td>${escapeHtml(e.department || '—')}</td>
       <td>${escapeHtml(e.education || '—')}</td>
-      <td>
-        <select class="role-select role-${escapeHtml(e.role || 'employee')}" data-role-for="${escapeHtml(e.id)}" ${(String(e.id) === String(user.id) || e.is_primary_admin || (isAdmin && ['admin','system_creator'].includes(e.role))) ? `disabled title="${e.is_primary_admin ? 'الحساب الأعلى محمي' : String(e.id) === String(user.id) ? 'لا يمكنك تغيير صلاحيتك الخاصة' : 'مدير النظام لا يمكنه تعديل صلاحيات الإدارة'}` : ''}>
-          ${roleOptionsHtml(e.role || 'employee')}
-        </select>
-        ${e.is_primary_admin ? '<span class="primary-admin-badge" title="مدير النظام الأساسي">🔒</span>' : ''}
-      </td>
+      <td>${isCreator ? `<select class="role-select role-${escapeHtml(e.role || 'employee')}" data-role-for="${escapeHtml(e.id)}" ${(String(e.id) === String(user.id) || e.is_primary_admin) ? 'disabled' : ''}>${roleOptionsHtml(e.role || 'employee')}</select>` : `<span class="role-readonly">${escapeHtml(ROLE_LABELS[e.role || 'employee'] || 'موظف')}</span>`}${e.is_primary_admin ? '<span class="primary-admin-badge">🔒</span>' : ''}</td>
       <td>${statusBadgeHtml(e.status)}</td>
       <td class="emp-actions-cell">
         <button class="row-icon-btn info-btn" data-action="view" title="عرض بيانات الموظف كما تظهر له">${miniIcon('view')}</button>
-        ${isSupervisor ? '' : `<button class="row-icon-btn" data-action="edit" title="تعديل بيانات الموظف">${miniIcon('edit')}</button>
-        ${isCreator ? `<button class="row-icon-btn" data-action="pw" title="تغيير كلمة المرور">${miniIcon('key')}</button>
-        <button class="row-icon-btn" data-action="reset" title="كلمة مرور افتراضية جديدة">${miniIcon('reset')}</button>` : ''}
-        <button class="row-icon-btn danger-icon" data-action="delete" title="حذف الموظف">${miniIcon('delete')}</button>`}
+        ${isCreator ? `<button class="row-icon-btn" data-action="edit" title="تعديل">${miniIcon('edit')}</button><button class="row-icon-btn" data-action="pw" title="كلمة المرور">${miniIcon('key')}</button><button class="row-icon-btn" data-action="reset" title="إعادة التعيين">${miniIcon('reset')}</button><button class="row-icon-btn" data-action="departure" title="تسجيل مغادرة">${miniIcon('reset')}</button><button class="row-icon-btn danger-icon" data-action="delete" title="حذف">${miniIcon('delete')}</button>` : ''}
       </td>
     </tr>`).join('');
   updateSelectAllState();
@@ -503,6 +495,9 @@ $('pw-save').addEventListener('click', async () => {
   } catch (e) { errEl.textContent = e.message; errEl.style.display = 'block'; }
 });
 
+// ---- Departure modal ----
+const departureModal=$('departure-modal');let departureTarget=null;if(departureModal){$('departure-cancel').onclick=()=>departureModal.classList.remove('open');$('departure-save').onclick=async()=>{try{await api(`/api/admin/employee/${encodeURIComponent(departureTarget.id)}/departure`,{method:'PATCH',body:JSON.stringify({leftDate:$('departure-date').value,reason:$('departure-reason').value})});departureModal.classList.remove('open');await loadEmployees()}catch(e){$('departure-error').textContent=e.message;$('departure-error').style.display='block'}}}function openDepartureModal(emp){departureTarget=emp;$('departure-date').value=new Date().toISOString().slice(0,10);$('departure-reason').value='';$('departure-error').style.display='none';departureModal.classList.add('open')}
+
 // ---- Delete modal (single or bulk) ----
 const deleteModal = $('delete-modal');
 let deleteTarget = null; // single employee object
@@ -568,11 +563,12 @@ $('emp-table-body').addEventListener('click', (e) => {
   const emp = allEmployees.find(x => String(x.id) === String(id));
   if (!emp) return;
   const action = btn.dataset.action;
-  if (action === 'view') return openViewModal(id);
-  if (action === 'edit') { if (isSupervisor) return showResult('غير مسموح', 'المشرف لا يمكنه تعديل بيانات الموظف.'); return openEditModal(emp); }
-  if (action === 'pw') { if (isSupervisor) return showResult('غير مسموح', 'المشرف لا يمكنه تغيير كلمة المرور.'); return openPwModal(emp); }
-  if (action === 'delete') { if (isSupervisor) return showResult('غير مسموح', 'المشرف لا يمكنه حذف الموظف.'); return openDeleteModal(emp); }
-  if (action === 'reset') { if (isSupervisor) return showResult('غير مسموح', 'المشرف لا يمكنه إعادة تعيين كلمة المرور.');
+  if (action === 'view') return location.href = `/employee.html?id=${encodeURIComponent(id)}`;
+  if (action === 'edit') { if (!isCreator) return showResult('غير مسموح', 'لا توجد صلاحية لهذا الإجراء.'); return openEditModal(emp); }
+  if (action === 'pw') { if (!isCreator) return showResult('غير مسموح', 'لا توجد صلاحية لهذا الإجراء.'); return openPwModal(emp); }
+  if (action === 'delete') { if (!isCreator) return showResult('غير مسموح', 'لا توجد صلاحية لهذا الإجراء.'); return openDeleteModal(emp); }
+  if (action === 'departure') return openDepartureModal(emp);
+  if (action === 'reset') { if (isSupervisor) return showResult('غير مسموح', 'غير مسموح.');
     api(`/api/admin/employee/${encodeURIComponent(id)}/reset-default`, { method: 'POST' })
       .then(data => showResult('تم إنشاء كلمة مرور افتراضية', `كلمة المرور الجديدة لـ ${emp.name}: ${data.password}\nسيُطلب من الموظف تغييرها عند أول تسجيل دخول.`))
       .catch(err => showResult('خطأ', err.message));
@@ -583,7 +579,7 @@ $('emp-table-body').addEventListener('click', (e) => {
 $('emp-table-body').addEventListener('click', (e) => {
   if (e.target.closest('button[data-action]') || e.target.closest('.select-col') || e.target.closest('select[data-role-for]')) return;
   const row = e.target.closest('tr[data-id]');
-  if (row) openViewModal(row.dataset.id);
+  if (row) location.href = `/employee.html?id=${encodeURIComponent(row.dataset.id)}`;
 });
 
 loadEmployees();
