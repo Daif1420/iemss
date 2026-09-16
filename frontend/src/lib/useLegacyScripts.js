@@ -70,6 +70,17 @@ export default function useLegacyScripts(srcList, deps = []) {
     return () => {
       cancelled = true;
       tags.forEach((t) => t.remove());
+
+      // Several legacy page scripts append their own <style> block to <head>
+      // (the login page's !important colour overrides, the home page's card
+      // styling, the post-login splash). React only owns the <style> rendered
+      // inside LegacyPage, so those head-level sheets used to survive every
+      // route change and stack on top of the next page — which is what made
+      // colours from one screen show up on another. Anything tagged
+      // data-iems-page-style belongs to the page that just unmounted.
+      document
+        .querySelectorAll('head style[data-iems-page-style]')
+        .forEach((el) => el.remove());
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, deps);

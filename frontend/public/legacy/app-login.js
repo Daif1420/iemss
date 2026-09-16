@@ -1,7 +1,12 @@
 
 /* Radical project-themed login visual */
 (() => {
-  const style = document.createElement('style');
+  // data-iems-page-style marks this as page-scoped: useLegacyScripts removes
+  // it when the route unmounts. Without it, these !important login colours
+  // stayed in <head> after login and bled into every other page.
+  const style = document.getElementById('iems-login-style') || document.createElement('style');
+  style.id = 'iems-login-style';
+  style.dataset.iemsPageStyle = 'login';
   style.textContent = `
     .visual-side{background:linear-gradient(145deg,#031b36 0%,#075baa 44%,#00a3d9 100%)!important}
     .visual-side:after{content:"";position:absolute;inset:0;opacity:.22;background-image:linear-gradient(rgba(255,255,255,.08) 1px,transparent 1px),linear-gradient(90deg,rgba(255,255,255,.08) 1px,transparent 1px);background-size:34px 34px;mask-image:radial-gradient(circle at 55% 45%,black,transparent 76%)}
@@ -17,7 +22,7 @@
     html[data-theme="dark"] .glass{background:rgba(14,20,30,.82)!important;box-shadow:0 26px 70px rgba(0,0,0,.4)!important}
     .brand-chip{border-radius:12px!important;background:rgba(255,255,255,.65)!important;padding:8px 12px!important}
   `;
-  document.head.appendChild(style);
+  if (!style.isConnected) document.head.appendChild(style);
 })();
 const btn = document.getElementById('login-btn');
 const errBox = document.getElementById('login-error');

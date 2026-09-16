@@ -1,5 +1,9 @@
 const token=sessionStorage.getItem('iems_token');const raw=sessionStorage.getItem('iems_user');let user=null;try{user=JSON.parse(raw||'null')}catch(_){}
-if(!token||!user||user.role!=='system_creator')location.href='/home.html';
+// Guard: a redirect is asynchronous, so the rest of this file used to keep
+// running with user === null and throw a TypeError, leaving a half-built
+// broken page on screen instead of navigating away. useLegacyScripts wraps
+// every legacy script in a function, so `return` here is valid and safe.
+if(!token||!user||user.role!=='system_creator'){location.href=token?'/home.html':'/index.html';return}
 const $=id=>document.getElementById(id);let pendingData=null;
 const esc=v=>String(v??'').replace(/[&<>'"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;',"'":'&#39;','"':'&quot;'}[c]));
 async function api(path,opts={}){const r=await fetch(path,{...opts,headers:{Authorization:'Bearer '+token,'Content-Type':'application/json',...(opts.headers||{})}});if(r.status===401){sessionStorage.clear();location.href='/index.html';throw Error('انتهت الجلسة')}const d=await r.json();if(!r.ok)throw Error(d.error||'حدث خطأ');return d}

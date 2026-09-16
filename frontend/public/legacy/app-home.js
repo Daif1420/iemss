@@ -1,7 +1,9 @@
 
 // Employee welcome styling (kept in the legacy script so the production dist receives it without a rebuild).
 (() => {
-  const style = document.createElement('style');
+  const style = document.getElementById('iems-home-style') || document.createElement('style');
+  style.id = 'iems-home-style';
+  style.dataset.iemsPageStyle = 'home';
   style.textContent = `
     #welcome-message{display:none!important}
     .detail-attendance-day{white-space:nowrap}.detail-attendance-day small{display:block;margin-top:3px;font-size:10px;font-weight:900;opacity:.78}
@@ -33,10 +35,11 @@
     @media(max-width:900px){.employee-welcome-content{grid-template-columns:1fr}.employee-welcome-features{grid-template-columns:1fr 1fr}}
     @media(max-width:560px){.employee-welcome-content{padding:18px}.employee-welcome-features{grid-template-columns:1fr}.employee-welcome-copy h2{font-size:21px}}
   `;
-  document.head.appendChild(style);
+  if (!style.isConnected) document.head.appendChild(style);
 })();
 /* IEMS Home: unified dashboard + attendance logic. The former page-specific scripts are intentionally removed. */
 (() => {
+window.__iemsLoadSystemBanner = loadSystemBanner;
 async function loadSystemBanner() {
   try {
     const token = sessionStorage.getItem('iems_token');
@@ -58,8 +61,13 @@ async function loadSystemBanner() {
 }
 const token = sessionStorage.getItem('iems_token');
 const userRaw = sessionStorage.getItem('iems_user');
-if (!token || !userRaw) window.location.href = '/index.html';
-const user = JSON.parse(userRaw);
+// A redirect is asynchronous: the rest of this file kept running after it and
+// then threw on `user.role` (user was null), so the page stayed blank instead
+// of navigating cleanly. Bail out immediately instead.
+if (!token || !userRaw) { window.location.href = '/index.html'; return; }
+let user = null;
+try { user = JSON.parse(userRaw); } catch (_) {}
+if (!user || !user.role) { sessionStorage.clear(); window.location.href = '/index.html'; return; }
 
 const $ = id => document.getElementById(id);
 function authHeaders() { return { Authorization: 'Bearer ' + token, 'Content-Type': 'application/json' }; }
@@ -122,10 +130,19 @@ $('chip-name').textContent = user.name;
 $('chip-role').textContent = `ID: ${user.id} · ${ROLE_LABEL}`;
 $('chip-avatar').textContent = (user.name || '?').trim()[0] || '?';
 $('logout-btn').addEventListener('click', () => { sessionStorage.clear(); window.location.href = '/index.html'; });
-// Employees management page: full-control admin only.
-if ((user.role === 'system_creator' || user.role === 'admin' || user.role === 'supervisor') && $('nav-employees')) $('nav-employees').style.display = 'inline-flex';
-if ((user.role === 'system_creator' || user.role === 'admin' || user.role === 'supervisor') && $('nav-reports')) $('nav-reports').style.display = 'inline-flex';
-if ((user.role === 'system_creator' || user.role === 'admin' || user.role === 'supervisor') && $('nav-manual-entry')) $('nav-manual-entry').style.display = 'inline-flex';
+// Nav visibility must match the guard at the top of each target page and the
+// role middleware on its API routes, otherwise a link is shown that just
+// bounces the user straight back here. Single source of truth:
+//   employees / import / reports -> supervisor, admin, system_creator
+//   manual entry                 -> admin, system_creator
+//   audit logs / themes          -> system_creator
+// (app-shell.js applies the same table; keep the two in sync.)
+const SUPERVISOR_UP = user.role === 'system_creator' || user.role === 'admin' || user.role === 'supervisor';
+const ADMIN_UP = user.role === 'system_creator' || user.role === 'admin';
+if ($('nav-employees')) $('nav-employees').style.display = SUPERVISOR_UP ? 'inline-flex' : 'none';
+if ($('nav-import')) $('nav-import').style.display = SUPERVISOR_UP ? 'inline-flex' : 'none';
+if ($('nav-reports')) $('nav-reports').style.display = SUPERVISOR_UP ? 'inline-flex' : 'none';
+if ($('nav-manual-entry')) $('nav-manual-entry').style.display = ADMIN_UP ? 'inline-flex' : 'none';
 
 // Company performance summary + company comparison chart + employee daily details: admin only.
 if (user.role === 'admin' || user.role === 'system_creator') {
@@ -294,7 +311,7 @@ function renderPerformanceChart(rows) {
   const W=900,H=320,L=58,R=18,T=18,B=48, pw=W-L-R, ph=H-T-B;
   const maxVal=Math.max(...rows.map(r=>Math.max(r.classification,r.index)),1);
   const x=i=>L+(rows.length===1?pw/2:(i/(rows.length-1))*pw);
-  const y=v=T+ph-(vOr(v,0)/maxVal)*ph;
+  const y=v=>T+ph-(vOr(v,0)/maxVal)*ph; // was `y=v=...`: a missing `>` turned this into an assignment to an undeclared global
   function pathFor(key){ return rows.map((r,i)=>`${i?'L':'M'} ${x(i).toFixed(1)} ${y(r[key]).toFixed(1)}`).join(' '); }
   function areaFor(key){ return `${pathFor(key)} L ${x(rows.length-1).toFixed(1)} ${T+ph} L ${x(0).toFixed(1)} ${T+ph} Z`; }
   const grid=[0,.25,.5,.75,1].map(t=>{const yy=T+ph*t; const val=Math.round(maxVal*(1-t)); return `<line x1="${L}" y1="${yy}" x2="${W-R}" y2="${yy}" class="chart-grid"/><text x="${L-10}" y="${yy+4}" text-anchor="end" class="chart-axis">${fmtShort(val)}</text>`}).join('');
@@ -308,6 +325,9 @@ function vOr(v,d){return Number.isFinite(Number(v))?Number(v):d;}
 function fmtShort(v){ const n=Number(v||0); if(n>=1000) return `${Math.round(n/1000)}K`; return Math.round(n); }
 
 function renderStageDonut(stageTotals) {
+  // These widgets were removed from home.body.html; keep the code inert rather
+  // than letting it throw on a null element if it is ever wired back up.
+  if(!$('donut-total')||!$('stage-donut')||!$('stage-legend')) return;
   const entries=Object.entries(stageTotals).filter(([,v])=>Number(v)>0).sort((a,b)=>b[1]-a[1]);
   const total=entries.reduce((a,[,v])=>a+Number(v),0);
   $('donut-total').textContent=fmtShort(total);
@@ -321,6 +341,7 @@ function renderStageDonut(stageTotals) {
 }
 
 function renderModernTopPerformers(groups) {
+  if(!$('top-performers-body')) return;
   const unique=new Map();
   Object.entries(groups).forEach(([stage,rows])=>rows.forEach(r=>{const id=String(r.id); const current=unique.get(id); if(!current || Number(r.achieved)>Number(current.achieved)) unique.set(id,{...r,stage});}));
   const rows=[...unique.values()].sort((a,b)=>Number(b.achieved)-Number(a.achieved)).slice(0,5);
@@ -328,6 +349,7 @@ function renderModernTopPerformers(groups) {
 }
 
 function renderActivities(data) {
+  if(!$('activity-list')) return;
   const rows=[];
   const range=data.range||{};
   rows.push({icon:uiIcon('upload'),cls:'green',title:'New daily data loaded',sub:`Selected period · ${fmtDate(range.from)} → ${fmtDate(range.to)}`,time:'Now'});
@@ -361,6 +383,7 @@ async function renderOverview() {
 // ---- Top 5 (admin only) ----
 function renderTop5(data) {
   if (user.role !== 'admin' && user.role !== 'system_creator') return;
+  if (!$('top5-range') || !$('top5-container') || !$('f-stage')) return;
   const stage = $('f-stage').value;
   const shiftVal = $('f-shift') ? $('f-shift').value : '__ALL__';
   const groups = stage !== '__ALL__' ? { [stage]: data.selectedTop5 || [] } : data.top5ByStage || {};
@@ -662,7 +685,7 @@ function kpis(t){
     return shared.kpiCard(label,value,cls,icon,shared.KPI_TREND_SHAPES[i]);
   }).join('');
 }
-function line(rows){const s=$('attendance-line-chart');if(!rows.length){s.innerHTML='<text x="450" y="165" text-anchor="middle" class="att-axis-text">لا توجد بيانات</text>';return}const W=900,H=330,L=48,R=20,T=18,B=44,pw=W-L-R,ph=H-T-B,x=i=>L+(rows.length===1?pw/2:i/(rows.length-1)*pw),y=v=>T+ph-(Math.max(0,Math.min(100,+v||0))/100)*ph;let g=[0,25,50,75,100].map(v=>`<line x1="${L}" y1="${y(v)}" x2="${W-R}" y2="${y(v)}" class="att-grid-line"/><text x="${L-8}" y="${y(v)+4}" text-anchor="end" class="att-axis-text">${v}%</text>`).join(''),path=k=>rows.map((r,i)=>`${i?'L':'M'} ${x(i).toFixed(1)} ${y(r[k]).toFixed(1)}`).join(' '),dots=(k,c)=>rows.map((r,i)=>`<circle cx="${x(i)}" cy="${y(r[k])}" r="4" class="${c}"/>`).join(''),labels=rows.map((r,i)=>`<text x="${x(i)}" y="${H-14}" text-anchor="middle" class="att-axis-text">${esc(r.date.slice(5))}</text>`).join('');s.innerHTML=g+`<path d="${path('attendance_rate')}" class="att-present-line"/><path d="${path('absence_rate')}" class="att-absent-line"/>${dots('attendance_rate','att-present-dot')}${dots('absence_rate','att-absent-dot')}${labels}`}
+function line(rows){const s=$('attendance-line-chart');if(!s)return;if(!rows.length){s.innerHTML='<text x="450" y="165" text-anchor="middle" class="att-axis-text">لا توجد بيانات</text>';return}const W=900,H=330,L=48,R=20,T=18,B=44,pw=W-L-R,ph=H-T-B,x=i=>L+(rows.length===1?pw/2:i/(rows.length-1)*pw),y=v=>T+ph-(Math.max(0,Math.min(100,+v||0))/100)*ph;let g=[0,25,50,75,100].map(v=>`<line x1="${L}" y1="${y(v)}" x2="${W-R}" y2="${y(v)}" class="att-grid-line"/><text x="${L-8}" y="${y(v)+4}" text-anchor="end" class="att-axis-text">${v}%</text>`).join(''),path=k=>rows.map((r,i)=>`${i?'L':'M'} ${x(i).toFixed(1)} ${y(r[k]).toFixed(1)}`).join(' '),dots=(k,c)=>rows.map((r,i)=>`<circle cx="${x(i)}" cy="${y(r[k])}" r="4" class="${c}"/>`).join(''),labels=rows.map((r,i)=>`<text x="${x(i)}" y="${H-14}" text-anchor="middle" class="att-axis-text">${esc(r.date.slice(5))}</text>`).join('');s.innerHTML=g+`<path d="${path('attendance_rate')}" class="att-present-line"/><path d="${path('absence_rate')}" class="att-absent-line"/>${dots('attendance_rate','att-present-dot')}${dots('absence_rate','att-absent-dot')}${labels}`}
 function bars(id,rows){const e=$(id),a=(rows||[]).slice(0,10);if(!e)return;if(!a.length){e.innerHTML='<div class="empty-attendance">لا توجد بيانات</div>';return}e.innerHTML=a.map(r=>{const t=+r.present+(+r.absent),p=t?(+r.present/t*100):0;return`<div class="bar-row"><span class="bar-label" title="${esc(r.name)}">${esc(r.name)}</span><div class="bar-track"><span class="bar-segment bar-present" style="width:${p}%"></span><span class="bar-segment bar-absent" style="width:${100-p}%"></span></div><span class="bar-value">${num(t)}</span></div>`}).join('')}
 function company(rows){const body=$('company-summary-body');if(!body)return;const total=rows.reduce((a,r)=>{a.employee_count+=+r.employee_count||0;a.present+=+r.present||0;a.absent+=+r.absent||0;a.gp+=+r.graduate_present||0;a.ga+=+r.graduate_absent||0;a.sp+=+r.student_present||0;a.sa+=+r.student_absent||0;return a},{employee_count:0,present:0,absent:0,gp:0,ga:0,sp:0,sa:0});const trs=rows.map(r=>{const tt=(+r.present||0)+(+r.absent||0);const ar=tt?(+r.present/tt*100):0;return`<tr><td><b>${esc(r.name)}</b></td><td>${num(r.employee_count)}</td><td class="att-status-present">${num(r.present)}</td><td class="att-status-absent">${num(r.absent)}</td><td class="att-status-present">${num(r.graduate_present)}</td><td class="att-status-absent">${num(r.graduate_absent)}</td><td class="att-status-present">${num(r.student_present)}</td><td class="att-status-absent">${num(r.student_absent)}</td><td>${pct(ar)}</td></tr>`}).join('');const tt=total.present+total.absent;const ar=tt?total.present/tt*100:0;body.innerHTML=(trs||'<tr><td colspan="9" class="empty-attendance">لا توجد بيانات</td></tr>')+`<tr class="summary-total-row"><td><b>الإجمالي</b></td><td><b>${num(total.employee_count)}</b></td><td class="att-status-present"><b>${num(total.present)}</b></td><td class="att-status-absent"><b>${num(total.absent)}</b></td><td class="att-status-present"><b>${num(total.gp)}</b></td><td class="att-status-absent"><b>${num(total.ga)}</b></td><td class="att-status-present"><b>${num(total.sp)}</b></td><td class="att-status-absent"><b>${num(total.sa)}</b></td><td><b>${pct(ar)}</b></td></tr>`}
 function employees(rows){$('employee-detail-summary').textContent=`${num(rows.length)} موظف · الفترة ${fmtDate(data.range.from)} إلى ${fmtDate(data.range.to)}`;$('employee-detail-body').innerHTML=rows.length?rows.map(r=>`<tr><td><b>${esc(r.name)}</b></td><td>${esc(r.id)}</td><td>${esc(r.company||'—')}</td><td>${esc(r.shift||'—')}</td><td>${esc(r.department||'—')}</td><td class="att-status-present">${num(r.present)}</td><td class="att-status-absent">${num(r.absent)}</td><td class="att-status-casual">${num(r.casual)}</td><td class="att-status-permission">${num(r.permission)}</td><td class="att-status-absent">${num(r.unauthorized)}</td><td class="att-status-medical">${num(r.medical)}</td><td>${pct(r.attendance_rate)}</td></tr>`).join(''):'<tr><td colspan="12" class="empty-attendance">لا توجد بيانات مطابقة</td></tr>'}
@@ -702,5 +725,9 @@ if(!window.html2canvas||!window.jspdf){
   root.remove(); return;
 }const btn=$('attendance-pdf');btn.disabled=true;btn.dataset.original=btn.textContent;btn.textContent='جاري إنشاء PDF...';let root;try{root=buildPdfRoot();const canvas=await html2canvas(root,{scale:2,backgroundColor:'#fff',useCORS:true,logging:false});const {jsPDF}=window.jspdf;const pdf=new jsPDF({unit:'mm',format:'a4',orientation:'landscape'});const pageW=297,pageH=210,margin=8,imgW=pageW-margin*2,imgH=canvas.height*imgW/canvas.width,usableH=pageH-margin*2;let offset=0,page=0;while(offset<imgH){if(page)pdf.addPage();const sourceY=Math.round(offset/imgH*canvas.height);const sourceH=Math.min(canvas.height-sourceY,Math.round(usableH/imgW*canvas.width));const slice=document.createElement('canvas');slice.width=canvas.width;slice.height=sourceH;slice.getContext('2d').drawImage(canvas,0,sourceY,canvas.width,sourceH,0,0,canvas.width,sourceH);const sliceH=slice.height*imgW/slice.width;pdf.addImage(slice.toDataURL('image/jpeg',0.92),'JPEG',margin,margin,imgW,sliceH);offset+=usableH;page++}pdf.save(`IEMS_Attendance_${data.range.from}_${data.range.to}.pdf`)}catch(e){console.error(e);alert('حدث خطأ أثناء إنشاء ملف PDF.')}finally{root?.remove();btn.disabled=false;btn.textContent=btn.dataset.original||'تحميل PDF'}}
 $('attendance-print').onclick=()=>print();$('attendance-excel').onclick=exportExcel;$('attendance-pdf').onclick=exportPdf;
-(async()=>{try{bindMulti();await loadSystemBanner();await init();await refresh()}catch(e){console.error(e)}})();
+// loadSystemBanner() is defined in the first IIFE above, so calling it from
+// inside this second, separately-scoped IIFE threw ReferenceError and aborted
+// this whole boot sequence — no filters, no data, empty home page. It is now
+// shared deliberately via window.__iemsLoadSystemBanner.
+(async()=>{try{bindMulti();await (window.__iemsLoadSystemBanner?.());await init();await refresh()}catch(e){console.error(e)}})();
 })();

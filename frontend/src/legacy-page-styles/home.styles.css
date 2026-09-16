@@ -53,7 +53,15 @@
 /* Unified Home + Attendance page */
 @import url('https://fonts.googleapis.com/css2?family=Cairo:wght@400;500;600;700;800;900&display=swap');
 
-:root{--primary:#065BAB;--primary-2:#044B8C;--accent:#4B86B5;--success:#16A34A;--warning:#F59E0B;--danger:#DC2626;--radius:12px;--shadow:none}
+/* The palette lives in legacy-style.css only.
+ * This file used to re-declare :root here with a DIFFERENT --accent (#4B86B5
+ * vs #065BAB), --success (#16A34A vs #2E9A5C), --warning (#F59E0B vs #D08A2E),
+ * --danger (#DC2626 vs #C6473F) and --shadow:none. Because a page stylesheet
+ * is injected after the global one, these won on the home page and nowhere
+ * else, so the same status colour rendered in two different shades depending
+ * on which screen you were looking at, and home lost every card shadow.
+ * --primary, --primary-2 and --radius were identical duplicates.
+ * Change colours in legacy-style.css instead. */
 
 
 /* Keep the original attendance page as the single visual system. */

@@ -1,8 +1,14 @@
 const token = sessionStorage.getItem('iems_token');
 const userRaw = sessionStorage.getItem('iems_user');
-if (!token || !userRaw) window.location.href = '/index.html';
-const user = JSON.parse(userRaw);
-if (!['system_creator','admin','supervisor'].includes(user.role)) window.location.href = '/home.html';
+// Guard: a redirect is asynchronous, so the rest of this file used to keep
+// running with user === null and throw a TypeError, leaving a half-built
+// broken page on screen instead of navigating away. useLegacyScripts wraps
+// every legacy script in a function, so `return` here is valid and safe.
+if (!token || !userRaw) { window.location.href = '/index.html'; return; }
+let user = null;
+try { user = JSON.parse(userRaw); } catch (_) {}
+if (!user || !user.role) { sessionStorage.clear(); window.location.href = '/index.html'; return; }
+if (!['system_creator','admin','supervisor'].includes(user.role)) { window.location.href = '/home.html'; return; }
 const $ = id => document.getElementById(id);
 function authHeaders(){return {Authorization:'Bearer '+token,'Content-Type':'application/json'}};
 async function api(path,opts={}){const res=await fetch(path,{...opts,headers:{...authHeaders(),...(opts.headers||{})}});if(res.status===401){sessionStorage.clear();location.href='/index.html';throw new Error('انتهت الجلسة')}const data=await res.json();if(!res.ok)throw new Error(data.error||'حدث خطأ');return data}
@@ -12,7 +18,16 @@ const savedTheme=localStorage.getItem('iems-theme')||'light';document.documentEl
 function themeIcon(){if(!$('theme-toggle'))return;$('theme-toggle').innerHTML=document.documentElement.dataset.theme==='dark'?'<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="4"></circle><path d="M12 2v2"></path><path d="M12 20v2"></path><path d="m4.93 4.93 1.41 1.41"></path><path d="m17.66 17.66 1.41 1.41"></path><path d="M2 12h2"></path><path d="M20 12h2"></path><path d="m6.34 17.66-1.41 1.41"></path><path d="m19.07 4.93-1.41 1.41"></path></svg>' : '<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20.985 12.486a9 9 0 1 1-9.473-9.472c.405-.022.617.46.402.803a6 6 0 0 0 8.268 8.268c.344-.215.825-.004.803.401"></path></svg>';}
 $('theme-toggle').onclick=()=>{const n=document.documentElement.dataset.theme==='dark'?'light':'dark';document.documentElement.dataset.theme=n;localStorage.setItem('iems-theme',n);themeIcon()};themeIcon();
 const file=$('master-file');const selected=$('selected-file');const dropzone=$('import-dropzone');
-if(importMonthEl&&!importMonthEl.value){const d=new Date();importMonthEl.value=`${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}`} 
+// NOTE: an "import month" input was removed from this page's markup, but the
+// script still referenced an undeclared `importMonthEl`, which threw
+// ReferenceError here and aborted the rest of the file — that is why the whole
+// import page (dropzone, upload button, history table) was dead. If the field
+// is ever re-added, look it up defensively with document.getElementById.
+const importMonthEl = $('import-month');
+if (importMonthEl && !importMonthEl.value) {
+  const d = new Date();
+  importMonthEl.value = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
+}
 
 // Multiple Master files can be selected/dropped together (e.g. Shift A +
 // Shift B + Shift C in one go). We keep our own working list of files
@@ -71,7 +86,10 @@ loadImportHistory();
 
 $('master-upload-btn').onclick=async()=>{
   const status=$('master-upload-status');
-  if(!importMonth){status.className='upload-status error';status.textContent='يرجى اختيار شهر البيانات أولاً.';return}
+  // The month selector was removed from this page and the /api/admin/import-master
+  // call below never sent a month, but this line still referenced a non-existent
+  // `importMonth` — a ReferenceError fired the moment you clicked Upload, so the
+  // button appeared completely dead.
   if(!selectedFiles.length){status.className='upload-status error';status.textContent='يرجى اختيار ملف Excel واحد على الأقل قبل المتابعة.';return}
   for(const f of selectedFiles){
     if(f.size>8*1024*1024){status.className='upload-status error';status.textContent=`حجم الملف "${f.name}" يتجاوز الحد المسموح به (8 ميغابايت).`;return}

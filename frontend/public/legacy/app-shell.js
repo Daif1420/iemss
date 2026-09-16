@@ -11,7 +11,10 @@
   const name = (user && user.name) ? user.name : '';
   const roleLabel = user && user.role === 'system_creator' ? 'منشئ النظام' : user && user.role === 'admin' ? 'مدير النظام' : user && user.role === 'supervisor' ? 'مشرف' : 'موظف';
 
-  const style = document.createElement('style');
+  // Scripts are re-executed on every client-side visit to this page, so guard
+  // the <style> injection — otherwise identical stylesheets pile up in <head>.
+  const style = document.getElementById('iems-splash-style') || document.createElement('style');
+  style.id = 'iems-splash-style';
   style.textContent = `
     #iems-splash{position:fixed;inset:0;z-index:99999;display:flex;align-items:center;justify-content:center;flex-direction:column;gap:18px;
       background:${isDark ? 'linear-gradient(135deg,#0b1220,#101a2e)' : 'linear-gradient(135deg,#065bab,#0a8fd8)'};
@@ -30,19 +33,24 @@
     @keyframes iemsSplashBlink{0%,80%,100%{opacity:.3}40%{opacity:1}}
     @keyframes iemsSplashOut{to{opacity:0;visibility:hidden}}
   `;
-  document.head.appendChild(style);
+  if (!style.isConnected) document.head.appendChild(style);
 
   const el = document.createElement('div');
   el.id = 'iems-splash';
+  // Absolute path: a relative "logo-dark.png" breaks on any route that is not
+  // at the site root.
   el.innerHTML = `
-    <div class="iems-splash-logo"><img src="logo-dark.png" alt="IEMS"></div>
+    <div class="iems-splash-logo"><img src="/logo-dark.png" alt="IEMS"></div>
     <h1>أهلاً بك${name ? '، ' + name : ''} 👋</h1>
     <p>${roleLabel} · جارٍ تجهيز لوحة التحكم...</p>
     <div class="iems-splash-dots"><span></span><span></span><span></span></div>
   `;
   el.addEventListener('click', () => el.remove());
-  document.addEventListener('DOMContentLoaded', () => document.body.appendChild(el));
-  if (document.readyState !== 'loading') document.body.appendChild(el);
+  // Both handlers below used to fire in some load orders, appending the splash
+  // twice (the second copy never animated out and covered the whole page).
+  const mount = () => { if (!el.isConnected) document.body.appendChild(el); };
+  if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', mount, { once: true });
+  else mount();
   setTimeout(() => { if (el.isConnected) el.remove(); }, 2500);
 })();
 
@@ -63,25 +71,42 @@
     a.setAttribute('aria-current', active ? 'page' : 'false');
   });
 
-  const adminOnly = document.querySelectorAll('[data-nav-role="admin"]');
-  adminOnly.forEach(el => { el.style.display = (user?.role === 'admin' || user?.role === 'system_creator') ? 'inline-flex' : 'none'; });
-  const uploader = document.querySelectorAll('[data-nav-role="supervisor"]');
-  uploader.forEach(el => { el.style.display = (user?.role === 'system_creator' || user?.role === 'admin' || user?.role === 'supervisor') ? 'inline-flex' : 'none'; });
+  // ---- Single permission table for the whole app ----
+  // This must match the guard at the top of each page script AND the role
+  // middleware on the APIs that page calls. Previously three different files
+  // disagreed (app-home.js showed Reports/Manual Entry to supervisors,
+  // this file hid Reports from them, and the pages themselves allowed
+  // supervisors on Reports but not Manual Entry) — so links either vanished
+  // or bounced the user back to the home page.
+  const role = user?.role || null;
+  const CREATOR = role === 'system_creator';
+  const ADMIN_UP = CREATOR || role === 'admin';
+  const SUPERVISOR_UP = ADMIN_UP || role === 'supervisor';
 
-  const importLink = document.getElementById('nav-import');
-  if (importLink) importLink.style.display = (user?.role === 'system_creator' || user?.role === 'admin' || user?.role === 'supervisor') ? 'inline-flex' : 'none';
-  const manualLink = document.getElementById('nav-manual-entry');
-  if (manualLink) manualLink.style.display = (user?.role === 'admin' || user?.role === 'system_creator') ? 'inline-flex' : 'none';
-  const reportsLink = document.getElementById('nav-reports');
-  if (reportsLink) reportsLink.style.display = (user?.role === 'admin' || user?.role === 'system_creator') ? 'inline-flex' : 'none';
-  const employeesLink = document.getElementById('nav-employees');
-  if (employeesLink) employeesLink.style.display = (user?.role === 'system_creator' || user?.role === 'admin' || user?.role === 'supervisor') ? 'inline-flex' : 'none';
-  const homeLink = document.getElementById('nav-home');
-  if (homeLink) homeLink.style.display = user?.role === 'employee' ? 'none' : 'inline-flex';
-  const auditLink = document.getElementById('nav-audit');
-  if (auditLink) auditLink.style.display = user?.role === 'system_creator' ? 'inline-flex' : 'none';
-  const themesLink = document.getElementById('nav-themes');
-  if (themesLink) themesLink.style.display = user?.role === 'system_creator' ? 'inline-flex' : 'none';
+  const NAV_ACCESS = {
+    'nav-home': !!role && role !== 'employee',
+    'nav-employees': SUPERVISOR_UP,   // page: supervisor+ · API: requireSupervisor
+    'nav-import': SUPERVISOR_UP,      // page: supervisor+ · API: requireUploader
+    'nav-reports': SUPERVISOR_UP,     // page: supervisor+ · API: requireSupervisor
+    'nav-manual-entry': ADMIN_UP,     // page: admin+     · API: requireAdmin
+    'nav-audit': CREATOR,             // API: requireSystemCreator
+    'nav-themes': CREATOR,            // API: requireSystemCreator
+  };
+  Object.entries(NAV_ACCESS).forEach(([id, allowed]) => {
+    const el = document.getElementById(id);
+    if (el) el.style.display = allowed ? 'inline-flex' : 'none';
+  });
+
+  // Fallback for any nav item that carries only a data-nav-role attribute
+  // (some pages' markup labels the same link differently, e.g. manual entry is
+  // tagged "supervisor" on the import page and "admin" on the home page). The
+  // id-based table above wins; this only covers untagged extras.
+  const ROLE_ATTR_ACCESS = { admin: ADMIN_UP, supervisor: SUPERVISOR_UP, creator: CREATOR };
+  document.querySelectorAll('[data-nav-role]').forEach(el => {
+    if (el.id && el.id in NAV_ACCESS) return;
+    const allowed = ROLE_ATTR_ACCESS[el.getAttribute('data-nav-role')];
+    if (allowed !== undefined) el.style.display = allowed ? 'inline-flex' : 'none';
+  });
 
   // Language toggle (AR/EN) — shared across every inner page that loads this file.
   const langToggle = document.getElementById('lang-toggle');

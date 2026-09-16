@@ -4,8 +4,10 @@ const userRaw = sessionStorage.getItem('iems_user');
 let user = null;
 try { user = userRaw ? JSON.parse(userRaw) : null; } catch (_) {}
 user = user || {};
-if (!token || !user.role) window.location.href = '/index.html';
-if (!['system_creator','admin','supervisor'].includes(user?.role)) window.location.href = '/home.html';
+// See the note in app-admin-import.js: redirect, then stop — don't keep
+// building a page the user is about to be navigated away from.
+if (!token || !user.role) { window.location.href = '/index.html'; return; }
+if (!['system_creator','admin','supervisor'].includes(user.role)) { window.location.href = '/home.html'; return; }
 const isSupervisor = user.role === 'supervisor';
 const isCreator = user.role === 'system_creator';
 const isAdmin = user.role === 'admin';
@@ -62,6 +64,15 @@ if ($('my-account-save')) $('my-account-save').addEventListener('click', async (
 function escapeHtml(v) { return String(v ?? '').replace(/[&<>'"]/g, ch => ({'&':'&amp;','<':'&lt;','>':'&gt;',"'":'&#39;','"':'&quot;'}[ch])); }
 // Target & performance figures are always shown as whole numbers (no decimals).
 function fmtNumber(v) { return Math.round(Number(v || 0)).toLocaleString('en-US'); }
+// This page renders attendance/target figures with fmtAttendanceNumber() in
+// three places but never defined it, so opening an employee's details threw
+// ReferenceError and the performance/target panels stayed blank. Same
+// implementation as app-home.js: keep decimals when the source value has them.
+function fmtAttendanceNumber(v) {
+  const n = Number(v);
+  if (!Number.isFinite(n)) return '0';
+  return n.toLocaleString('en-US', { minimumFractionDigits: 0, maximumFractionDigits: 2 });
+}
 function fmtHours(v) {
   if (v === null || v === undefined || v === '') return '—';
   const n = Number(v);
