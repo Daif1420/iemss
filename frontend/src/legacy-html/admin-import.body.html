@@ -19,13 +19,6 @@
     <div class="panel-head"><div><span class="eyebrow">استيراد الملف الرئيسي</span><h2>استيراد ملف البيانات</h2><p class="muted">اسحب ملف أو أكثر من ملفات Excel بصيغة XLSX وأفلتها هنا (مثلاً Shift A و Shift B و Shift C معاً)، أو انقر على المربع لاختيارها من جهازك. بعد التحديث، ستظهر أسماء الموظفين الذين تم تحديث بياناتهم أو إضافتهم حديثاً لكل ملف.</p></div></div>
     <label class="import-dropzone" id="import-dropzone" for="master-file"><div class="import-icon"><svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3v12"></path><path d="m17 8-5-5-5 5"></path><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path></svg></div><div><strong>انقر هنا أو اسحب ملفات Master وأفلتها</strong><small>يمكن اختيار أكثر من ملف معاً · بصيغة XLSX · حد أقصى 8 ميغابايت لكل ملف</small></div><input type="file" id="master-file" multiple accept=".xlsx,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"></label>
     <div class="selected-file" id="selected-file" style="display:none"></div>
-    <section class="sheet-preview-panel" id="sheet-preview-panel" style="display:none">
-      <div class="sheet-preview-head">
-        <div><span class="eyebrow">معاينة قبل التحديث</span><h3>محتوى الشيت</h3><p class="muted">راجع البيانات الموجودة داخل الملفات قبل تنفيذ التحديث. لن يتم تعديل قاعدة البيانات أثناء المعاينة.</p></div>
-        <span class="preview-status" id="preview-status"></span>
-      </div>
-      <div id="sheet-preview-container" class="sheet-preview-container"></div>
-    </section>
     <div class="import-actions"><button class="apply-btn icon-text-btn" id="master-upload-btn" data-i18n-aria="nav.import" title="تحديث البيانات" aria-label="تحديث البيانات" disabled><svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 12a9 9 0 0 1 9-9 9.75 9.75 0 0 1 6.74 2.74L21 8"></path><path d="M21 3v5h-5"></path><path d="M21 12a9 9 0 0 1-9 9 9.75 9.75 0 0 1-6.74-2.74L3 16"></path><path d="M8 16H3v5"></path></svg><span data-i18n="nav.import">تحديث البيانات</span></button><span class="upload-status" id="master-upload-status"></span></div>
   </section>
   <section class="panel updated-panel">

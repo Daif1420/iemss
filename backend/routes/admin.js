@@ -1037,32 +1037,41 @@ router.post('/manual/supervisor-target', requireAuth, requireAdmin, async (req, 
 // ---- Reports (used by public/reports.html) ----
 
 // Distinct stage names recorded in stage_daily, for the report stage filter.
-router.get('/report/stages', requireAuth, requireSupervisor, async (req, res) => {
+router.get('/report/stages', requireAuth, async (req, res) => {
   const rows = (await db.prepare(`SELECT DISTINCT stage FROM stage_daily WHERE stage <> 'TOTAL TARGET %' ORDER BY stage`).all());
   res.json({ stages: rows.map(r => r.stage) });
 });
 
 // Employees who have at least one daily record within [from, to] (optionally
 // filtered to one stage), with their target/value summed over that range.
-router.get('/report/attendance', requireAuth, requireSupervisor, async (req, res) => {
+router.get('/report/attendance', requireAuth, async (req, res) => {
   const { from, to } = req.query;
   const stages = parseList(req.query.stage);
-  const isShiftScoped = req.user.role === 'supervisor';
-  const supervisorShift = isShiftScoped ? String(req.user.shift || '').trim() : null;
-  if (isShiftScoped && !supervisorShift) return res.status(403).json({ error: 'حساب المشرف غير مرتبط بشيفت.' });
+  const requestedShifts = parseList(req.query.shift);
+  const isAdmin = req.user.role === 'admin' || req.user.role === 'system_creator';
+  const isSupervisor = req.user.role === 'supervisor';
+  const isEmployee = req.user.role === 'employee';
+  const ownShift = String(req.user.shift || '').trim();
+  if (isSupervisor && !ownShift) return res.status(403).json({ error: 'حساب المشرف غير مرتبط بشيفت.' });
+  if (isEmployee && !req.user.id) return res.status(403).json({ error: 'حساب الموظف غير صالح.' });
+  if (!stages.length) return res.status(400).json({ error: 'اختيار المرحلة شرط أساسي لإنشاء تقرير أرقام الموظفين.' });
 
   if (!from || !to || !/^\d{4}-\d{2}-\d{2}$/.test(from) || !/^\d{4}-\d{2}-\d{2}$/.test(to)) {
     return res.status(400).json({ error: 'حدد فترة تاريخ صالحة (من - إلى).' });
   }
 
-  const stageSql = stages.length ? ` AND stage IN (${stages.map(()=>'?').join(',')})` : '';
-  const idParams = stages.length ? [from, to, ...stages] : [from, to];
-  const shiftSql = isShiftScoped ? ' AND e.shift = ?' : '';
+  const stageSql = ` AND sd.stage IN (${stages.map(()=>'?').join(',')})`;
+  const idParams = [from, to, ...stages];
+  let shiftSql = '';
+  let scopeParams = [...idParams];
+  if (isSupervisor) { shiftSql = ' AND e.shift = ?'; scopeParams.push(ownShift); }
+  else if (isEmployee) { shiftSql = ' AND e.id = ?'; scopeParams.push(Number(req.user.id)); }
+  else if (isAdmin && requestedShifts.length) { shiftSql = ` AND e.shift IN (${requestedShifts.map(()=>'?').join(',')})`; scopeParams.push(...requestedShifts); }
   const empIds = (await db.prepare(`
     SELECT DISTINCT sd.employee_id FROM stage_daily sd
     JOIN employees e ON e.id = sd.employee_id
     WHERE sd.entry_date BETWEEN ? AND ?${stageSql}${shiftSql}
-  `).all(...(isShiftScoped ? [...idParams, supervisorShift] : idParams))).map(r => r.employee_id);
+  `).all(...scopeParams)).map(r => r.employee_id);
 
   if (!empIds.length) {
     return res.json({ employees: [], total: 0, from, to, stage: stages.length ? stages : '__ALL__' });

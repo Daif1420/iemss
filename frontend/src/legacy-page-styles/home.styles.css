@@ -650,7 +650,7 @@ html[data-theme="dark"] .info-item.rank-badge-item{background:linear-gradient(13
 
 /* Final Home KPI layout: desktop is always 4 columns x 3 rows. */
 @media(min-width:761px){
-  #modern-dashboard #kpi-grid{grid-template-columns:repeat(4,minmax(0,1fr))!important;gap:16px!important}
+  #modern-dashboard #kpi-grid{grid-template-columns:repeat(4,minmax(0,1fr))!important;grid-template-rows:repeat(3,minmax(0,auto))!important;gap:16px!important}
   #modern-dashboard #kpi-grid > .kpi-link-wrap::before,
   #modern-dashboard #kpi-grid > .kpi-card2::before{display:none!important;content:none!important}
 }

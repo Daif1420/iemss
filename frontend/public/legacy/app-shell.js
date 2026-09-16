@@ -127,7 +127,7 @@
     'nav-home': !!role && role !== 'employee',
     'nav-employees': SUPERVISOR_UP,   // page: supervisor+ · API: requireSupervisor
     'nav-import': SUPERVISOR_UP,      // page: supervisor+ · API: requireUploader
-    'nav-reports': SUPERVISOR_UP,     // page: supervisor+ · API: requireSupervisor
+    'nav-reports': !!role,               // page: all authenticated users
     'nav-manual-entry': ADMIN_UP,     // page: admin+     · API: requireAdmin
     'nav-audit': CREATOR,             // API: requireSystemCreator
     'nav-themes': CREATOR,            // API: requireSystemCreator

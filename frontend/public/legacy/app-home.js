@@ -705,7 +705,7 @@ function kpis(t){
   const cards=rows.map((x,i)=>{
     const [label,val,cls,icon]=x;
     const value=typeof val==='string'?val:num(val);
-    return shared.kpiCard(label,value,cls,icon,shared.KPI_TREND_SHAPES[i+7]);
+    return shared.kpiCard(label,value,cls,icon,shared.KPI_TREND_SHAPES[i % shared.KPI_TREND_SHAPES.length]);
   }).join('');
   const wrappers=[...target.querySelectorAll('.kpi-link-wrap')];
   target.insertAdjacentHTML('beforeend',cards);
