@@ -1,5 +1,0 @@
-.quick-links-row{display:grid;grid-template-columns:repeat(3,1fr);gap:12px;margin-bottom:6px}
-.quick-link-card{display:flex;align-items:center;gap:10px;padding:14px 16px;background:var(--soft);border:1px solid var(--line);border-radius:13px;color:var(--text);text-decoration:none;font-size:12px;font-weight:800;transition:.18s}
-.quick-link-card:hover{border-color:var(--primary);color:var(--primary);transform:translateY(-2px);box-shadow:var(--shadow)}
-.quick-link-icon{width:34px;height:34px;flex:0 0 34px;display:grid;place-items:center;border-radius:10px;background:linear-gradient(135deg,var(--primary),var(--primary-2));font-size:16px}
-@media(max-width:680px){.quick-links-row{grid-template-columns:1fr}}

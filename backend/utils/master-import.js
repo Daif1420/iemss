@@ -1153,13 +1153,7 @@ function parseMasterWorkbook(buffer) {
 
       employee.stages.push({
         role: stageName,
-        daily,
-        // Per-stage totals, straight from this row's own AN/AO/AP columns
-        // (Total Achievement / Total Target / Percentage) — not just the
-        // employee-level summary, which only ever reflects the attendance row.
-        achievement: row[40] ?? null,
-        target: row[41] ?? null,
-        percentage: row[42] ?? null,
+        daily
       });
     }
 
