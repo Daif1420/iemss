@@ -114,7 +114,7 @@
     const oldLegal = pageMain.querySelector('.legal');
     const footer = document.createElement('footer');
     footer.className = 'iems-credit-footer';
-    footer.innerHTML = '<span>© 2026 IEMS</span><span>Product Design &amp; Development by</span><strong>Mohamed H. Daif</strong>';
+    footer.innerHTML = '<div class="credit-copy"><div class="credit-year">© 2026 IEMS</div><div class="credit-by">Product Design &amp; Development by</div><div class="credit-name">Mohamed H. Daif</div></div>';
     if (oldLegal) oldLegal.replaceWith(footer); else pageMain.appendChild(footer);
   }
 
