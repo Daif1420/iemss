@@ -212,7 +212,10 @@ function svgIcon(type) {
     rate:'<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 3v18h18"></path><path d="m7 16 4-5 3 3 5-7"></path></svg>',
     unauthorized:'<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"></circle><path d="M12 7v5l3 2"></path></svg>',
     medical:'<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10Z"></path><path d="M9 12h6"></path><path d="M12 9v6"></path></svg>',
-    chart:'<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 3v16a2 2 0 0 0 2 2h16"></path><path d="m19 9-5 5-4-4-3 3"></path></svg>'
+     chart:'<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 3v16a2 2 0 0 0 2 2h16"></path><path d="m19 9-5 5-4-4-3 3"></path></svg>',
+     leave:'<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 3h6l1 4H8z"></path><path d="M6 7h12v14H6z"></path><path d="M10 11h4M10 15h4"></path></svg>',
+     new:'<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="8" r="4"></circle><path d="M5 21a7 7 0 0 1 14 0M19 8v6M16 11h6"></path></svg>',
+     other:'<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="5" cy="12" r="2"></circle><circle cx="12" cy="12" r="2"></circle><circle cx="19" cy="12" r="2"></circle></svg>'
   };
   return icons[type] || icons.chart;
 }
@@ -270,7 +273,8 @@ function renderKpis(overview) {
     ['إجمالي شركة سمارت بيزنس', Number(o.smart || 0), 'teal', 'company', 'smart'],
     ['إجمالي شركة برافوس', Number(o.bravos || 0), 'amber', 'company', 'bravos'],
     ['إجمالي الطلاب', Number(o.students || 0), 'purple', 'student', 'students'],
-    ['إجمالي الخريجين', Number(o.graduates || 0), 'rose', 'graduate', 'graduates'],
+     ['إجمالي الخريجين', Number(o.graduates || 0), 'rose', 'graduate', 'graduates'],
+     ['إجمالي أخرى', Number(o.other || 0), 'slate', 'other', 'other'],
     ['إجمالي المغادرين', Number(o.leftEmployees || 0), 'left-kpi', 'leave', 'left'],
     ['إجمالي الجدد', Number(o.newEmployees || 0), 'new-kpi', 'new', 'new']
   ];
@@ -428,12 +432,16 @@ async function loadSelfView(dashData) {
   if (user.role === 'system_creator' || user.role === 'admin' || user.role === 'supervisor') {
     $('self-view-grid').style.display = 'none';
     $('detail-panel').style.display = 'none';
+    if ($('employee-links-panel')) $('employee-links-panel').style.display = 'none';
+    if ($('employee-detail-actions')) $('employee-detail-actions').style.display = 'none';
     if ($('supervisor-target-panel')) $('supervisor-target-panel').style.display = 'none';
     if ($('emp-kpi-grid')) $('emp-kpi-grid').style.display = 'none';
     return;
   }
   $('self-view-grid').style.display = 'grid';
   $('detail-panel').style.display = 'block';
+  if ($('employee-links-panel')) $('employee-links-panel').style.display = 'block';
+  if ($('employee-detail-actions')) $('employee-detail-actions').style.display = 'flex';
   if ($('emp-kpi-grid')) $('emp-kpi-grid').style.display = 'grid';
 
   const params = new URLSearchParams();
@@ -528,11 +536,18 @@ async function loadSelfView(dashData) {
     // than one shift, show every stored shift separately above its own table.
     // The employee profile/KPIs above remain tied to the canonical target shift.
     const shiftProfiles = Array.isArray(data.shiftProfiles) ? data.shiftProfiles : [];
+    const selectedStage = $('f-stage')?.value || '__ALL__';
+    const selectedFrom = $('f-from')?.value || '';
+    const selectedTo = $('f-to')?.value || '';
+    const inSelectedPeriod = date => (!selectedFrom || date >= selectedFrom) && (!selectedTo || date <= selectedTo);
     const normalizedProfiles = shiftProfiles.map(p => {
       const stageMap = {};
       (p.stages || []).forEach(st => {
         if (!st || !st.role) return;
-        stageMap[st.role] = Object.entries(st.daily || {}).map(([date, value]) => ({ date, value }));
+         if (selectedStage !== '__ALL__' && selectedStage && st.role !== selectedStage) return;
+         stageMap[st.role] = Object.entries(st.daily || {})
+           .filter(([date]) => inSelectedPeriod(date))
+           .map(([date, value]) => ({ date, value }));
       });
       return { shift: p.shift || 'Other', stages: stageMap, summary: p.summary || {}, employee: p.employee || {} };
     });
@@ -542,7 +557,10 @@ async function loadSelfView(dashData) {
       const totalTargetEntry = allStageEntries.find(([name]) => String(name).trim().toUpperCase() === 'TOTAL TARGET %');
       const stageEntries = allStageEntries.filter(([name, rows]) => {
         if (String(name).trim().toUpperCase() === 'TOTAL TARGET %') return false;
-        if (String(name).trim() === 'الحضور') return false;
+         // A secondary snapshot is the employee's proof of attendance in a
+         // different shift. Keep that attendance row visible under Other,
+         // while the canonical shift keeps its existing performance layout.
+         if (String(name).trim() === 'الحضور' && profile.shift !== 'Other') return false;
         return (rows || []).some(r => r.value !== null && r.value !== undefined && r.value !== '');
       }).sort(([a], [b]) => String(a).localeCompare(String(b), 'ar'));
 
@@ -550,9 +568,10 @@ async function loadSelfView(dashData) {
       stageEntries.forEach(([, rows]) => rows.forEach(r => dateSet.add(r.date)));
       if (totalTargetEntry) totalTargetEntry[1].forEach(r => dateSet.add(r.date));
       const dates = [...dateSet].sort();
-      const periodPercent = fmtPercent(Number(profile.summary?.monthly_target));
+       const totalTarget = Number(profile.summary?.total_target ?? profile.summary?.monthly_target);
+       const periodPercent = fmtPercent(Number(profile.summary?.percentage));
       const totalRowCount = stageEntries.length + (totalTargetEntry ? 1 : 0);
-      const head = '<th>المرحلة</th>' + dates.map(d => `<th>${escapeHtml(d.slice(5))}</th>`).join('') + '<th>الإجمالي</th><th>النسبة</th>';
+       const head = '<th>المرحلة</th>' + dates.map(d => `<th>${escapeHtml(d.slice(5))}</th>`).join('') + '<th>الإجمالي</th><th>نسبة الإنجاز</th>';
 
       if (!stageEntries.length && !totalTargetEntry) {
         return `${showShiftHeading ? `<div class="shift-detail-heading"><span>تفاصيل Shift ${escapeHtml(profile.shift)}</span></div>` : ''}<div class="table-wrap"><table><thead><tr>${head}</tr></thead><tbody><tr><td colspan="${dates.length + 3}"><div class="empty-state">لا توجد بيانات مطابقة.</div></td></tr></tbody></table></div>`;
@@ -560,15 +579,18 @@ async function loadSelfView(dashData) {
 
       const stageRows = stageEntries.map(([stageName, rows], idx) => {
         const byDate = Object.fromEntries(rows.map(r => [r.date, r.value]));
-        let sum = 0, hasNum = false;
+         let sum = 0, hasNum = false;
         const cells = dates.map(d => {
           const v = byDate[d];
           if (v === undefined || v === null || v === '') return '<td class="cell-empty">—</td>';
-          if (typeof v === 'number' && Number.isFinite(v)) { sum += v; hasNum = true; return `<td class="cell-present">${fmtAttendanceNumber(v)}</td>`; }
+           const numericValue = Number(v);
+           if (Number.isFinite(numericValue) && String(v).trim() !== '') { sum += numericValue; hasNum = true; return `<td class="cell-present">${fmtAttendanceNumber(numericValue)}</td>`; }
           return `<td class="cell-present">${escapeHtml(v)}</td>`;
         }).join('');
-        const percentCell = idx === 0 ? `<td rowspan="${totalRowCount}" class="merged-target-percent"><div class="merged-target-percent-inner"><b class="merged-target-percent-value">${periodPercent}</b><span class="merged-target-percent-label">النسبة الإجمالية</span></div></td>` : '';
-        return `<tr><td><b>${escapeHtml(stageName)}</b></td>${cells}<td>${hasNum ? fmtAttendanceNumber(sum) : '—'}</td>${percentCell}</tr>`;
+         const isAttendance = String(stageName).trim() === 'الحضور';
+         const stagePercent = !isAttendance && hasNum && Number.isFinite(totalTarget) && totalTarget > 0 ? fmtPercent(sum / totalTarget) : '—';
+         const percentCell = idx === 0 && periodPercent !== '—' ? `<td rowspan="${totalRowCount}" class="merged-target-percent"><div class="merged-target-percent-inner"><b class="merged-target-percent-value">${periodPercent}</b><span class="merged-target-percent-label">النسبة الإجمالية</span></div></td>` : `<td>${stagePercent}</td>`;
+         return `<tr><td><b>${escapeHtml(stageName)}</b></td>${cells}<td>${hasNum ? fmtAttendanceNumber(sum) : '—'}</td>${percentCell}</tr>`;
       });
 
       if (totalTargetEntry) {
@@ -580,8 +602,8 @@ async function loadSelfView(dashData) {
           const n = Number(v);
           return Number.isFinite(n) ? `<td class="cell-present total-target-cell">${fmtPercent(n)}</td>` : `<td class="cell-present total-target-cell">${escapeHtml(v)}</td>`;
         }).join('');
-        const totalTargetCell = Number.isFinite(Number(profile.summary?.monthly_target)) ? fmtPercent(Number(profile.summary.monthly_target)) : '—';
-        const percentCellForTotalRow = stageEntries.length === 0 ? `<td rowspan="${totalRowCount}" class="merged-target-percent"><div class="merged-target-percent-inner"><b class="merged-target-percent-value">${periodPercent}</b><span class="merged-target-percent-label">النسبة الإجمالية</span></div></td>` : '';
+         const totalTargetCell = Number.isFinite(Number(profile.summary?.monthly_target)) ? fmtPercent(Number(profile.summary.monthly_target)) : '—';
+         const percentCellForTotalRow = stageEntries.length === 0 && periodPercent !== '—' ? `<td rowspan="${totalRowCount}" class="merged-target-percent"><div class="merged-target-percent-inner"><b class="merged-target-percent-value">${periodPercent}</b><span class="merged-target-percent-label">النسبة الإجمالية</span></div></td>` : '<td>—</td>';
         stageRows.push(`<tr class="total-target-master-row"><td><b>إجمالي التارجت اليومي</b></td>${cells}<td><b>${totalTargetCell}</b></td>${percentCellForTotalRow}</tr>`);
       }
 
@@ -590,6 +612,121 @@ async function loadSelfView(dashData) {
 
     const profilesToShow = normalizedProfiles.length > 1 ? normalizedProfiles : [{ shift: emp.shift || 'Other', stages: data.stages || {}, summary: s, employee: emp }];
     const duplicateShifts = normalizedProfiles.length > 1;
+     const exportDates = [...new Set(profilesToShow.flatMap(p => Object.values(p.stages || {}).flatMap(rows => (rows || []).map(r => r.date))))].sort();
+     const exportRows = profilesToShow.flatMap(profile => {
+       const target = Number(profile.summary?.total_target);
+       return Object.entries(profile.stages || {}).map(([stage, rows]) => {
+         const numericValues = (rows || []).map(r => Number(r.value)).filter(Number.isFinite);
+         const total = numericValues.reduce((sum, value) => sum + value, 0);
+         const isAttendance = String(stage).trim() === 'الحضور';
+         return {
+           shift: profile.shift,
+           stage,
+           values: Object.fromEntries((rows || []).map(r => [r.date, r.value])),
+           total: numericValues.length ? total : null,
+           percentage: !isAttendance && numericValues.length && Number.isFinite(target) && target > 0 ? total / target : null,
+         };
+       });
+     });
+     window.__iemsEmployeeDetailExport = {
+       employee: emp,
+       summary: s,
+       from: $('f-from')?.value || '',
+       to: $('f-to')?.value || '',
+       dates: exportDates,
+       rows: exportRows,
+     };
+
+     const downloadBlob = (blob, filename) => {
+       const link = document.createElement('a');
+       link.href = URL.createObjectURL(blob);
+       link.download = filename;
+       link.click();
+       setTimeout(() => URL.revokeObjectURL(link.href), 1000);
+     };
+     const employeeExportTable = () => {
+       const current = window.__iemsEmployeeDetailExport;
+       const head = ['الشيفت', 'المرحلة', ...current.dates.map(fmtDate), 'الإجمالي', 'نسبة الإنجاز'];
+       const rows = current.rows.map(row => [
+         row.shift,
+         row.stage,
+         ...current.dates.map(date => row.values[date] ?? ''),
+         row.total ?? '',
+         row.percentage === null ? '' : fmtPercent(row.percentage),
+       ]);
+       return { current, head, rows };
+     };
+     const exportEmployeeExcel = () => {
+       const { current, head, rows } = employeeExportTable();
+       const summaryRows = [
+         ['الموظف', current.employee.name],
+         ['ID', current.employee.id],
+         ['الفترة', `${fmtDate(current.from)} → ${fmtDate(current.to)}`],
+         ['نسبة التارجت الإجمالية', fmtPercent(current.summary?.percentage)],
+         ['إجمالي الإنجاز', current.summary?.total_achievement ?? ''],
+         ['إجمالي التارجت', current.summary?.total_target ?? ''],
+         [],
+         head,
+         ...rows,
+       ];
+       if (window.XLSX) {
+         const wb = XLSX.utils.book_new();
+         const ws = XLSX.utils.aoa_to_sheet(summaryRows);
+         ws['!cols'] = summaryRows[summaryRows.length - rows.length - 1].map((_, i) => ({ wch: Math.max(14, ...summaryRows.map(r => String(r[i] ?? '').length + 2).slice(0, 80)) }));
+         XLSX.utils.book_append_sheet(wb, ws, 'تفاصيل الموظف');
+         XLSX.writeFile(wb, `IEMS_Employee_${current.employee.id}_${current.from || 'all'}_${current.to || 'all'}.xlsx`);
+         return;
+       }
+       const xmlEscape = value => String(value ?? '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+       const xmlRows = summaryRows.map(row => `<Row>${row.map(value => `<Cell><Data ss:Type="${typeof value === 'number' ? 'Number' : 'String'}">${xmlEscape(value)}</Data></Cell>`).join('')}</Row>`).join('');
+       const xml = `<?xml version="1.0"?><Workbook xmlns="urn:schemas-microsoft-com:office:spreadsheet" xmlns:ss="urn:schemas-microsoft-com:office:spreadsheet"><Worksheet ss:Name="تفاصيل الموظف"><Table>${xmlRows}</Table></Worksheet></Workbook>`;
+       downloadBlob(new Blob([xml], { type: 'application/vnd.ms-excel' }), `IEMS_Employee_${current.employee.id}.xls`);
+     };
+     const buildEmployeePdfRoot = () => {
+       const { current, head, rows } = employeeExportTable();
+       const root = document.createElement('div');
+       root.id = 'employee-detail-pdf-root';
+       root.dir = 'rtl';
+       root.innerHTML = `<div class="employee-pdf-sheet"><h1>تفاصيل أداء الموظف</h1><p><b>${escapeHtml(current.employee.name)}</b> · ID ${escapeHtml(current.employee.id)} · ${fmtDate(current.from)} → ${fmtDate(current.to)}</p><div class="employee-pdf-summary"><span>نسبة التارجت: <b>${fmtPercent(current.summary?.percentage)}</b></span><span>الإنجاز: <b>${fmtNumber(current.summary?.total_achievement)}</b></span><span>التارجت: <b>${fmtNumber(current.summary?.total_target)}</b></span></div><table><thead><tr>${head.map(cell => `<th>${escapeHtml(cell)}</th>`).join('')}</tr></thead><tbody>${rows.map(row => `<tr>${row.map(cell => `<td>${escapeHtml(cell)}</td>`).join('')}</tr>`).join('')}</tbody></table></div>`;
+       document.body.appendChild(root);
+       return root;
+     };
+     const exportEmployeePdf = async () => {
+       const current = window.__iemsEmployeeDetailExport;
+       if (!current) return;
+       const root = buildEmployeePdfRoot();
+       const cleanup = () => root.remove();
+       if (!window.html2canvas || !window.jspdf) {
+         const style = document.createElement('style');
+         style.textContent = '@media print{@page{size:A4 landscape;margin:8mm}body>*:not(#employee-detail-pdf-root){display:none!important}#employee-detail-pdf-root{display:block!important}}';
+         root.appendChild(style);
+         const printWindow = window.open('', '_blank');
+         if (printWindow) { printWindow.document.write(`<html><head><title>IEMS Employee Details</title></head><body>${root.innerHTML}</body></html>`); printWindow.document.close(); printWindow.focus(); setTimeout(() => printWindow.print(), 300); }
+         cleanup();
+         return;
+       }
+       try {
+         const canvas = await html2canvas(root, { scale: 2, backgroundColor: '#fff', useCORS: true, logging: false });
+         const { jsPDF } = window.jspdf;
+         const pdf = new jsPDF({ unit: 'mm', format: 'a4', orientation: 'landscape' });
+         const margin = 8, pageW = 297, pageH = 210, imgW = pageW - margin * 2, imgH = canvas.height * imgW / canvas.width, usableH = pageH - margin * 2;
+         let offset = 0, page = 0;
+         while (offset < imgH) {
+           if (page) pdf.addPage();
+           const sourceY = Math.round(offset / imgH * canvas.height);
+           const sourceH = Math.min(canvas.height - sourceY, Math.round(usableH / imgW * canvas.width));
+           const slice = document.createElement('canvas');
+           slice.width = canvas.width; slice.height = sourceH;
+           slice.getContext('2d').drawImage(canvas, 0, sourceY, canvas.width, sourceH, 0, 0, canvas.width, sourceH);
+           pdf.addImage(slice.toDataURL('image/jpeg', .92), 'JPEG', margin, margin, imgW, slice.height * imgW / slice.width);
+           offset += usableH; page++;
+         }
+         pdf.save(`IEMS_Employee_${current.employee.id}_${current.from || 'all'}_${current.to || 'all'}.pdf`);
+       } finally { cleanup(); }
+     };
+     if ($('employee-detail-excel')) $('employee-detail-excel').onclick = exportEmployeeExcel;
+     if ($('employee-detail-pdf')) $('employee-detail-pdf').onclick = exportEmployeePdf;
+
     const detailPanel = $('detail-panel');
     const targetShiftBanner = $('target-shift-banner');
     if (targetShiftBanner) {
@@ -728,7 +865,7 @@ function syncDashboardFilters(){
 async function refresh(){const f=$('att-from').value,t=$('att-to').value;if(f&&t&&f>t){alert('تاريخ البداية يجب أن يسبق تاريخ النهاية.');return}try{const selected=await api('/api/attendance?'+params());render(selected);syncDashboardFilters();window.__iemsDashboardRefresh?.()}catch(e){$('employee-detail-body').innerHTML=`<tr><td colspan="11" class="empty-attendance">${esc(e.message)}</td></tr>`}}
 function range(k){if(!dates.length)return;const last=dates.at(-1),d=new Date(last+'T00:00:00');if(k==='all'){$('att-from').value=dates[0];$('att-to').value=last}else if(k==='today'){$('att-from').value=last;$('att-to').value=last}else{const x=new Date(d);x.setDate(d.getDate()-(k==='week'?6:30));$('att-from').value=iso(x);$('att-to').value=last}}
 if($('attendance-apply'))$('attendance-apply').onclick=refresh;
-if(!$('attendance-apply')){const host=document.querySelector('.attendance-apply-row')||document.querySelector('.attendance-filter-head-actions');if(host){const btn=document.createElement('button');btn.className='apply-btn filter-apply attendance-apply attendance-apply-full';btn.id='attendance-apply';btn.type='button';btn.title='عرض النتائج';btn.setAttribute('aria-label','عرض النتائج');btn.innerHTML='<svg viewBox="0 0 24 24" aria-hidden="true"><path d="m21 21-4.3-4.3M10.8 18a7.2 7.2 0 1 1 0-14.4 7.2 7.2 0 0 1 0 14.4Z" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round"/></svg><span>عرض النتائج</span>';host.appendChild(btn);btn.onclick=refresh;}}$('attendance-reset').onclick=async()=>{['att-company','att-department','att-shift','att-status'].forEach(clearMulti);$('att-search').value='';const first=dates[0],last=dates.at(-1);if(first&&last){$('att-from').value=first;$('att-to').value=last}await refresh()};$('att-from').onchange=()=>{if($('att-to').value&&$('att-from').value>$('att-to').value)$('att-to').value=$('att-from').value};document.querySelectorAll('.quick-ranges button[data-range]').forEach(b=>b.onclick=()=>{range(b.dataset.range)});function exportExcel(){if(!data){return}
+if(!$('attendance-apply')){const host=document.querySelector('.attendance-apply-row')||document.querySelector('.attendance-filter-head-actions');if(host){const btn=document.createElement('button');btn.className='apply-btn filter-apply attendance-apply attendance-apply-full';btn.id='attendance-apply';btn.type='button';btn.title='عرض النتائج';btn.setAttribute('aria-label','عرض النتائج');btn.innerHTML='<svg viewBox="0 0 24 24" aria-hidden="true"><path d="m21 21-4.3-4.3M10.8 18a7.2 7.2 0 1 1 0-14.4 7.2 7.2 0 0 1 0 14.4Z" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round"/></svg><span>عرض النتائج</span>';host.appendChild(btn);btn.onclick=refresh;}}$('attendance-reset').onclick=async()=>{['att-company','att-department','att-shift','att-status'].forEach(clearMulti);$('att-search').value='';const first=dates[0],last=dates.at(-1);if(first&&last){$('att-from').value=first;$('att-to').value=last}await refresh()};$('att-from').onchange=()=>{if($('att-to').value&&$('att-from').value>$('att-to').value)$('att-to').value=$('att-from').value};document.querySelectorAll('.quick-ranges button[data-range]').forEach(b=>b.onclick=async()=>{range(b.dataset.range);await refresh()});function exportExcel(){if(!data){return}
 if(!window.XLSX){
   // Dependency-free Excel-compatible fallback (.xls / SpreadsheetML).
   const escXml=v=>String(v??'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');

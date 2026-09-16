@@ -26,8 +26,8 @@
   <div class="filter-head modern-filter-head attendance-filter-head">
     <div class="filter-title-wrap"><span class="filter-icon"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 5h16M7 12h10M10 19h4" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg></span><div><h2>تصفية بيانات الحضور</h2><span>حدد الفترة والمعايير المطلوبة ثم اعرض النتائج.</span></div></div>
     <div class="attendance-filter-head-actions">
-      <div class="quick-ranges employee-filter-hide" aria-label="فترات سريعة"><span>فترات سريعة:</span><button type="button" data-range="today">اليوم</button><button type="button" data-range="week">هذا الأسبوع</button><button type="button" data-range="month">هذا الشهر</button><button type="button" data-range="all">كل البيانات</button></div>
-      <button class="reset-btn attendance-refresh-btn employee-filter-hide" id="attendance-reset" title="إعادة ضبط الفلاتر" aria-label="إعادة ضبط الفلاتر"><svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 12a9 9 0 0 1 9-9 9.75 9.75 0 0 1 6.74 2.74L21 8"></path><path d="M21 3v5h-5"></path><path d="M21 12a9 9 0 0 1-9 9 9.75 9.75 0 0 1-6.74-2.74L3 16"></path><path d="M8 16H3v5"></path></svg><span>إعادة ضبط الفلاتر</span></button>
+      <div class="quick-ranges" aria-label="فترات سريعة"><span>فترات سريعة:</span><button type="button" data-range="today">اليوم</button><button type="button" data-range="week">هذا الأسبوع</button><button type="button" data-range="month">هذا الشهر</button><button type="button" data-range="all">كل البيانات</button></div>
+      <button class="reset-btn attendance-refresh-btn" id="attendance-reset" title="إعادة ضبط الفلاتر" aria-label="إعادة ضبط الفلاتر"><svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 12a9 9 0 0 1 9-9 9.75 9.75 0 0 1 6.74 2.74L21 8"></path><path d="M21 3v5h-5"></path><path d="M21 12a9 9 0 0 1-9 9 9.75 9.75 0 0 1-6.74-2.74L3 16"></path><path d="M8 16H3v5"></path></svg><span>إعادة ضبط الفلاتر</span></button>
     </div>
   </div>
   <input type="search" id="att-search" class="visually-hidden" tabindex="-1" aria-hidden="true">
@@ -88,10 +88,28 @@
       <div id="supervisor-target-container"></div>
     </section>
 
-    <section class="panel detail-panel" id="detail-panel" style="display:none">
-      <div class="panel-head"><div><span class="eyebrow" data-i18n="detail.eyebrow">التفاصيل اليومية</span><h2 data-i18n="detail.title">التفاصيل اليومية</h2></div></div>
+     <section class="panel detail-panel" id="detail-panel" style="display:none">
+       <div class="panel-head detail-head-row"><div><span class="eyebrow" data-i18n="detail.eyebrow">التفاصيل اليومية</span><h2 data-i18n="detail.title">التفاصيل اليومية</h2></div><div class="detail-actions employee-detail-actions" id="employee-detail-actions" style="display:none"><button class="excel-btn" id="employee-detail-excel" title="تحميل تفاصيل الموظف Excel" aria-label="تحميل تفاصيل الموظف Excel"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" aria-hidden="true"><path d="M6 22a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h8a2.4 2.4 0 0 1 1.704.706l3.588 3.588A2.4 2.4 0 0 1 20 8v12a2 2 0 0 1-2 2z"></path><path d="M14 2v5a1 1 0 0 0 1 1h5"></path><path d="M8 13h2"></path><path d="M14 13h2"></path><path d="M8 17h2"></path><path d="M14 17h2"></path></svg> تحميل Excel</button><button class="pdf-btn" id="employee-detail-pdf" title="تحميل تفاصيل الموظف PDF" aria-label="تحميل تفاصيل الموظف PDF"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" aria-hidden="true"><path d="M6 22a2 2 0 0 1-2-2V4a2.4 2.4 0 0 1 1.704-2L20 8v12a2 2 0 0 1-2 2z"></path><path d="M14 2v5a1 1 0 0 0 1 1h5"></path><path d="M10 9H8"></path><path d="M16 13H8"></path><path d="M16 17H8"></path></svg> تحميل PDF</button></div></div>
       <div class="table-wrap"><table><thead><tr id="detail-head"></tr></thead><tbody id="detail-body"></tbody></table></div>
     </section>
+
+     <section class="panel employee-links-panel" id="employee-links-panel" style="display:none">
+       <div class="panel-head"><div><span class="eyebrow">روابط الموظف</span><h2>خدمات مهمة</h2><p>وصول سريع إلى الخدمات واللوائح المرتبطة بعملك.</p></div></div>
+       <div class="employee-links-grid">
+         <a class="employee-link-card" href="https://ziadkhaled14.pythonanywhere.com/" target="_blank" rel="noopener noreferrer">
+           <span class="employee-link-icon"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 6.5A2.5 2.5 0 0 1 6.5 4H20v14H6.5A2.5 2.5 0 0 0 4 20.5z" fill="none" stroke="currentColor" stroke-width="1.8"/><path d="M4 6.5v14M8 8h8M8 12h7" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg></span>
+           <span><b>بوابة المرتبات</b><small>عرض بيانات المرتب والخدمات المالية</small></span><span class="employee-link-button">فتح الرابط ↗</span>
+         </a>
+         <a class="employee-link-card" href="https://docs.google.com/forms/d/e/1FAIpQLSfkQ-R62KSoU6IgyU5Ku0C-I1kVImbhTIqWm3urnQc_dOkFBg/viewform" target="_blank" rel="noopener noreferrer">
+           <span class="employee-link-icon"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 3h9l3 3v15H6z" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"/><path d="M14 3v4h4M9 12h6M9 16h6" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg></span>
+           <span><b>طلب مستحقات</b><small>إرسال طلب مستحقات من خلال النموذج</small></span><span class="employee-link-button">تقديم الطلب ↗</span>
+         </a>
+         <a class="employee-link-card" href="https://drive.google.com/file/d/1c4Af3qdLm3dROQeAYOCe8kUlEDGclPA8/view" target="_blank" rel="noopener noreferrer">
+           <span class="employee-link-icon"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 3h9l3 3v15H6z" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"/><path d="M14 3v4h4M9 12h6M9 16h4" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg></span>
+           <span><b>لائحة العمل</b><small>مراجعة لوائح وسياسات العمل</small></span><span class="employee-link-button">قراءة اللائحة ↗</span>
+         </a>
+       </div>
+     </section>
     
 <section class="panel company-summary-panel" id="company-summary-panel" style="display:none"><div class="panel-head"><div><span class="eyebrow">ملخص الشركات</span><h2>ملخص أداء الشركات</h2><p>عرض سريع لأعداد الموظفين والحضور والغياب ونسبة الحضور.</p></div></div><div class="table-wrap"><table class="attendance-table"><thead><tr><th>الشركة</th><th>عدد الموظفين</th><th>الحضور</th><th>الغياب</th><th>حضور الخريجين</th><th>غياب الخريجين</th><th>حضور الطلاب</th><th>غياب الطلاب</th><th>نسبة الحضور</th></tr></thead><tbody id="company-summary-body"></tbody></table></div></section>
 <section class="panel daily-panel"><div class="panel-head"><div><span class="eyebrow">المتابعة اليومية</span><h2>الحضور يومًا بيوم</h2><p>تفصيل يومي لنتائج الفترة المحددة.</p></div></div><div class="table-wrap"><table class="attendance-table"><thead><tr><th>التاريخ</th><th>اليوم</th><th>الإجمالي الحضور</th><th>إجمالي الغياب</th><th>إجازة عارضة</th><th>إجازة بإذن</th><th>إجازة بدون إذن</th><th>إجازة مرضي</th><th>نسبة الحضور</th></tr></thead><tbody id="daily-body"></tbody></table></div></section>

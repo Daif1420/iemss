@@ -648,6 +648,26 @@ html[data-theme="dark"] .info-item.rank-badge-item{background:linear-gradient(13
 @media(max-width:900px){.kpi-grid{grid-template-columns:repeat(2,minmax(0,1fr))!important}}
 @media(max-width:560px){.kpi-grid{grid-template-columns:1fr!important}}
 
+/* Employee quick actions, exports and external service links */
+.employee-detail-actions{display:flex;align-items:center;gap:8px;flex-wrap:wrap}
+.employee-detail-actions button{min-height:38px}
+.employee-detail-actions svg{width:16px;height:16px;fill:none;stroke:currentColor;stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round}
+.employee-detail-actions .excel-btn:hover:not(:disabled){border-color:var(--success);color:var(--success)}
+.employee-detail-actions .pdf-btn:hover:not(:disabled){border-color:var(--danger);color:var(--danger)}
+.employee-links-panel{margin-top:16px}
+.employee-links-grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:12px}
+.employee-link-card{display:grid;grid-template-columns:auto 1fr;grid-template-areas:"icon copy" "icon button";align-items:center;column-gap:12px;row-gap:8px;padding:16px;border:1px solid var(--line);border-radius:16px;background:linear-gradient(135deg,color-mix(in srgb,var(--primary) 7%,var(--panel)),var(--panel));color:var(--text);text-decoration:none;box-shadow:var(--shadow);transition:transform .18s ease,border-color .18s ease,box-shadow .18s ease}
+.employee-link-card:hover{transform:translateY(-2px);border-color:var(--primary);box-shadow:0 12px 28px rgba(6,91,171,.13)}
+.employee-link-icon{grid-area:icon;width:42px;height:42px;display:grid;place-items:center;border-radius:13px;background:color-mix(in srgb,var(--primary) 14%,var(--panel));color:var(--primary)}
+.employee-link-icon svg{width:23px;height:23px}
+.employee-link-card>span:nth-child(2){grid-area:copy;display:flex;flex-direction:column;gap:2px;min-width:0}
+.employee-link-card b{font-size:12px;font-weight:900}
+.employee-link-card small{font-size:9px;line-height:1.7;color:var(--muted);font-weight:700}
+.employee-link-button{grid-area:button;justify-self:start;padding:6px 10px;border-radius:8px;background:var(--primary);color:#fff;font-size:9px;font-weight:900}
+.employee-link-card:hover .employee-link-button{background:var(--primary-2)}
+@media(max-width:900px){.employee-links-grid{grid-template-columns:1fr 1fr}}
+@media(max-width:560px){.employee-links-grid{grid-template-columns:1fr}.employee-detail-actions{width:100%}.employee-detail-actions button{flex:1}}
+
 /* Final Home KPI layout: desktop is always 4 columns x 3 rows. */
 @media(min-width:761px){
   #modern-dashboard #kpi-grid{grid-template-columns:repeat(4,minmax(0,1fr))!important;grid-template-rows:repeat(3,minmax(0,auto))!important;gap:16px!important}
