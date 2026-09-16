@@ -7,11 +7,10 @@
   style.textContent = `
     #welcome-message{display:none!important}
     .detail-attendance-day{white-space:nowrap}.detail-attendance-day small{display:block;margin-top:3px;font-size:10px;font-weight:900;opacity:.78}
-    .merged-target-percent{border:2px solid #065BAB;text-align:center;vertical-align:middle;background:rgba(6,91,171,.06)}
-    .merged-target-percent-inner{display:flex;flex-direction:column;align-items:center;justify-content:center;gap:6px;padding:10px 6px}
-    .merged-target-percent-value{font-size:26px;font-weight:900;color:#065BAB;line-height:1}
-    .merged-target-percent-label{font-size:11px;font-weight:800;color:var(--muted);opacity:.85}
-    html[data-theme="dark"] .merged-target-percent-value{color:#3B9BFF}
+    .detail-date-head{display:flex;flex-direction:column;align-items:center;gap:3px;min-width:62px}.detail-date-head .detail-day{font-size:11px;font-weight:900;color:var(--primary)}.detail-date-head .detail-date{font-size:14px;font-weight:950;color:var(--text);direction:ltr}
+    .target-percent{display:inline-flex;align-items:center;justify-content:center;min-width:54px;padding:5px 8px;border-radius:8px;font-weight:950;line-height:1.2}.target-percent-low{color:#b42318;background:#fee4e2;border:1px solid #fda29b}.target-percent-mid{color:#9a6700;background:#fff4cc;border:1px solid #f5cf67}.target-percent-high{color:#087443;background:#d9f7e8;border:1px solid #7ad7a6}
+    .total-target-master-row>td{background:color-mix(in srgb,var(--primary) 5%,var(--panel));font-weight:900}.total-target-master-row .total-target-cell{font-weight:950}
+    html[data-theme="dark"] .target-percent-low{color:#ffb4ab;background:rgba(180,35,24,.22);border-color:rgba(253,162,155,.45)}html[data-theme="dark"] .target-percent-mid{color:#ffdf7e;background:rgba(154,103,0,.22);border-color:rgba(245,207,103,.45)}html[data-theme="dark"] .target-percent-high{color:#8ff0bb;background:rgba(8,116,67,.22);border-color:rgba(122,215,166,.45)}
     .employee-welcome-content{display:grid;grid-template-columns:minmax(260px,.85fr) minmax(0,1.6fr);gap:24px;align-items:stretch;margin:0 0 18px;padding:26px;border:1px solid var(--line);border-radius:22px;background:linear-gradient(135deg,rgba(6,91,171,.10),rgba(6,91,171,.025) 55%,var(--panel));box-shadow:0 14px 38px rgba(15,23,42,.06);overflow:hidden;position:relative}
     .employee-welcome-content:before{content:"";position:absolute;width:260px;height:260px;border-radius:50%;inset:auto -90px -120px auto;background:radial-gradient(circle,rgba(6,91,171,.18),transparent 68%);pointer-events:none}
     .employee-welcome-copy{display:flex;flex-direction:column;justify-content:center;position:relative;z-index:1}
@@ -111,6 +110,26 @@ function fmtPercent(v) {
   const n = Number(v);
   if (!Number.isFinite(n)) return '—';
   return Math.round(n * 100) + '%';
+}
+function achievementPercent(summary) {
+  const achievement = Number(summary?.total_achievement);
+  const target = Number(summary?.total_target); // Master!AO — إجمالي التارجت
+  return Number.isFinite(achievement) && Number.isFinite(target) && target > 0 ? achievement / target : null;
+}
+function percentClass(value) {
+  const n = Number(value);
+  if (!Number.isFinite(n)) return '';
+  const percent = n * 100;
+  return percent < 50 ? 'target-percent-low' : percent < 70 ? 'target-percent-mid' : 'target-percent-high';
+}
+function coloredPercent(value) {
+  const text = fmtPercent(value);
+  return text === '—' ? '—' : `<span class="target-percent ${percentClass(value)}">${text}</span>`;
+}
+function detailWeekday(date) {
+  const names = ['الأحد','الاثنين','الثلاثاء','الأربعاء','الخميس','الجمعة','السبت'];
+  const parsed = new Date(`${date}T00:00:00Z`);
+  return Number.isNaN(parsed.getTime()) ? '—' : names[parsed.getUTCDay()];
 }
 
 // Theme
@@ -442,6 +461,7 @@ async function loadSelfView(dashData) {
   $('detail-panel').style.display = 'block';
   if ($('employee-links-panel')) $('employee-links-panel').style.display = 'block';
   if ($('employee-detail-actions')) $('employee-detail-actions').style.display = 'flex';
+  $('employee-detail-pdf')?.querySelector('path')?.setAttribute('d', 'M6 22a2 2 0 0 1-2-2V4a2.4 2.4 0 0 1 1.704-2L20 8v12a2 2 0 0 1-2 2z');
   if ($('emp-kpi-grid')) $('emp-kpi-grid').style.display = 'grid';
 
   const params = new URLSearchParams();
@@ -485,7 +505,7 @@ async function loadSelfView(dashData) {
 
     if ($('emp-perf-card')) {
       $('emp-perf-card').innerHTML = `
-        <div class="info-item"><span>نسبة التارجت</span><b class="accent-value">${fmtPercent(s.percentage)}</b></div>
+        <div class="info-item"><span>نسبة التارجت</span><b class="accent-value">${fmtPercent(totalAchievementPercent)}</b></div>
         <div class="info-item"><span>أيام الحضور</span><b class="accent-value">${fmtAttendanceNumber(s.total_present_days ?? a.present_days)}</b></div>
         <div class="info-item"><span>رقم الشريحة</span><b>${escapeHtml(s.bonus_tier ?? '—')}</b></div>
         <div class="info-item"><span>إجمالي طبيعة العمل</span><b>${fmtNumber(s.work_nature_allowance)}</b></div>
@@ -502,16 +522,9 @@ async function loadSelfView(dashData) {
     // date filter currently selected on Home.
     renderSupervisorTargets(data.supervisorTargets || {});
 
-    // The monthly target is shown once, in the performance card.
-    // Supervisor monthly percentages are added to it for the final monthly target.
-    const supervisorSections = data.supervisorTargets || {};
-    let supervisorMonthlyTotal = 0;
-    Object.values(supervisorSections).forEach(rows => (rows || []).forEach(r => {
-      const n = Number(r.targetMonthly);
-      if (Number.isFinite(n)) supervisorMonthlyTotal += n;
-    }));
-    const baseMonthlyTarget = Number(s.monthly_target);
-    const finalMonthlyTarget = (Number.isFinite(baseMonthlyTarget) ? baseMonthlyTarget : 0) + supervisorMonthlyTotal;
+    // AP is kept as an imported reference, but the displayed achievement
+    // percentage is calculated from AN / AO so AO remains the denominator.
+    const totalAchievementPercent = achievementPercent(s);
 
     if ($('emp-kpi-grid')) {
       const presentDays = Number(s.total_present_days ?? a.present_days ?? 0);
@@ -520,7 +533,7 @@ async function loadSelfView(dashData) {
       const bonusTierNum = Number(bonusTier);
       const bonusTierDisplay = (bonusTier !== null && bonusTier !== undefined && bonusTier !== '' && Number.isFinite(bonusTierNum)) ? Math.round(bonusTierNum) : bonusTier;
       const rawKpis = [
-        { label: 'نسبة التارجت الشهري', raw: finalMonthlyTarget, display: fmtPercent(finalMonthlyTarget), cls: 'blue', icon: 'rate' },
+        { label: 'نسبة التارجت الشهري', raw: totalAchievementPercent, display: fmtPercent(totalAchievementPercent), cls: 'blue', icon: 'rate' },
         { label: 'أيام الحضور', raw: presentDays, display: fmtAttendanceNumber(presentDays), cls: 'teal', icon: 'present' },
         { label: 'أيام الغياب', raw: absenceDays, display: absenceDays, cls: 'amber', icon: 'absent' },
         { label: 'رقم الشريحة', raw: bonusTier, display: bonusTierDisplay, cls: 'purple', icon: 'chart' }
@@ -568,10 +581,9 @@ async function loadSelfView(dashData) {
       stageEntries.forEach(([, rows]) => rows.forEach(r => dateSet.add(r.date)));
       if (totalTargetEntry) totalTargetEntry[1].forEach(r => dateSet.add(r.date));
       const dates = [...dateSet].sort();
-       const totalTarget = Number(profile.summary?.total_target ?? profile.summary?.monthly_target);
-       const periodPercent = fmtPercent(Number(profile.summary?.percentage));
-      const totalRowCount = stageEntries.length + (totalTargetEntry ? 1 : 0);
-       const head = '<th>المرحلة</th>' + dates.map(d => `<th>${escapeHtml(d.slice(5))}</th>`).join('') + '<th>الإجمالي</th><th>نسبة الإنجاز</th>';
+       const totalTarget = Number(profile.summary?.total_target); // Master!AO
+       const periodPercent = fmtPercent(achievementPercent(profile.summary));
+       const head = '<th>المرحلة</th>' + dates.map(d => `<th><span class="detail-date-head"><span class="detail-day">${detailWeekday(d)}</span><strong class="detail-date">${escapeHtml(d.slice(8) + '/' + d.slice(5, 7))}</strong></span></th>`).join('') + '<th>الإجمالي</th><th>نسبة الإنجاز</th>';
 
       if (!stageEntries.length && !totalTargetEntry) {
         return `${showShiftHeading ? `<div class="shift-detail-heading"><span>تفاصيل Shift ${escapeHtml(profile.shift)}</span></div>` : ''}<div class="table-wrap"><table><thead><tr>${head}</tr></thead><tbody><tr><td colspan="${dates.length + 3}"><div class="empty-state">لا توجد بيانات مطابقة.</div></td></tr></tbody></table></div>`;
@@ -589,7 +601,7 @@ async function loadSelfView(dashData) {
         }).join('');
          const isAttendance = String(stageName).trim() === 'الحضور';
          const stagePercent = !isAttendance && hasNum && Number.isFinite(totalTarget) && totalTarget > 0 ? fmtPercent(sum / totalTarget) : '—';
-         const percentCell = idx === 0 && periodPercent !== '—' ? `<td rowspan="${totalRowCount}" class="merged-target-percent"><div class="merged-target-percent-inner"><b class="merged-target-percent-value">${periodPercent}</b><span class="merged-target-percent-label">النسبة الإجمالية</span></div></td>` : `<td>${stagePercent}</td>`;
+         const percentCell = `<td>${stagePercent === '—' ? '—' : coloredPercent(sum / totalTarget)}</td>`;
          return `<tr><td><b>${escapeHtml(stageName)}</b></td>${cells}<td>${hasNum ? fmtAttendanceNumber(sum) : '—'}</td>${percentCell}</tr>`;
       });
 
@@ -600,10 +612,10 @@ async function loadSelfView(dashData) {
           const v = byDate[d];
           if (v === undefined || v === null || v === '') return '<td class="cell-empty total-target-cell">—</td>';
           const n = Number(v);
-          return Number.isFinite(n) ? `<td class="cell-present total-target-cell">${fmtPercent(n)}</td>` : `<td class="cell-present total-target-cell">${escapeHtml(v)}</td>`;
+           return Number.isFinite(n) ? `<td class="cell-present total-target-cell">${coloredPercent(n)}</td>` : `<td class="cell-present total-target-cell">${escapeHtml(v)}</td>`;
         }).join('');
-         const totalTargetCell = Number.isFinite(Number(profile.summary?.monthly_target)) ? fmtPercent(Number(profile.summary.monthly_target)) : '—';
-         const percentCellForTotalRow = stageEntries.length === 0 && periodPercent !== '—' ? `<td rowspan="${totalRowCount}" class="merged-target-percent"><div class="merged-target-percent-inner"><b class="merged-target-percent-value">${periodPercent}</b><span class="merged-target-percent-label">النسبة الإجمالية</span></div></td>` : '<td>—</td>';
+         const totalTargetCell = Number.isFinite(totalTarget) ? fmtNumber(totalTarget) : '—';
+         const percentCellForTotalRow = periodPercent === '—' ? '<td>—</td>' : `<td>${coloredPercent(achievementPercent(profile.summary))}</td>`;
         stageRows.push(`<tr class="total-target-master-row"><td><b>إجمالي التارجت اليومي</b></td>${cells}<td><b>${totalTargetCell}</b></td>${percentCellForTotalRow}</tr>`);
       }
 
@@ -662,7 +674,7 @@ async function loadSelfView(dashData) {
          ['الموظف', current.employee.name],
          ['ID', current.employee.id],
          ['الفترة', `${fmtDate(current.from)} → ${fmtDate(current.to)}`],
-         ['نسبة التارجت الإجمالية', fmtPercent(current.summary?.percentage)],
+         ['نسبة التارجت الإجمالية', fmtPercent(achievementPercent(current.summary))],
          ['إجمالي الإنجاز', current.summary?.total_achievement ?? ''],
          ['إجمالي التارجت', current.summary?.total_target ?? ''],
          [],
@@ -687,7 +699,7 @@ async function loadSelfView(dashData) {
        const root = document.createElement('div');
        root.id = 'employee-detail-pdf-root';
        root.dir = 'rtl';
-       root.innerHTML = `<div class="employee-pdf-sheet"><h1>تفاصيل أداء الموظف</h1><p><b>${escapeHtml(current.employee.name)}</b> · ID ${escapeHtml(current.employee.id)} · ${fmtDate(current.from)} → ${fmtDate(current.to)}</p><div class="employee-pdf-summary"><span>نسبة التارجت: <b>${fmtPercent(current.summary?.percentage)}</b></span><span>الإنجاز: <b>${fmtNumber(current.summary?.total_achievement)}</b></span><span>التارجت: <b>${fmtNumber(current.summary?.total_target)}</b></span></div><table><thead><tr>${head.map(cell => `<th>${escapeHtml(cell)}</th>`).join('')}</tr></thead><tbody>${rows.map(row => `<tr>${row.map(cell => `<td>${escapeHtml(cell)}</td>`).join('')}</tr>`).join('')}</tbody></table></div>`;
+       root.innerHTML = `<div class="employee-pdf-sheet"><h1>تفاصيل أداء الموظف</h1><p><b>${escapeHtml(current.employee.name)}</b> · ID ${escapeHtml(current.employee.id)} · ${fmtDate(current.from)} → ${fmtDate(current.to)}</p><div class="employee-pdf-summary"><span>نسبة التارجت: <b>${fmtPercent(achievementPercent(current.summary))}</b></span><span>الإنجاز: <b>${fmtNumber(current.summary?.total_achievement)}</b></span><span>التارجت: <b>${fmtNumber(current.summary?.total_target)}</b></span></div><table><thead><tr>${head.map(cell => `<th>${escapeHtml(cell)}</th>`).join('')}</tr></thead><tbody>${rows.map(row => `<tr>${row.map(cell => `<td>${escapeHtml(cell)}</td>`).join('')}</tr>`).join('')}</tbody></table></div>`;
        document.body.appendChild(root);
        return root;
      };

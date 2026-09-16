@@ -72,27 +72,6 @@
 
     <div class="kpi-grid" id="emp-kpi-grid" style="display:none"></div>
 
-    <section class="dashboard-grid" id="self-view-grid" style="display:none">
-      <div class="panel employee-panel">
-        <div class="panel-head"><div><span class="eyebrow" data-i18n="emp.eyebrow">بيانات الموظف</span><h2 data-i18n="emp.title">بيانات الموظف</h2></div></div>
-        <div class="emp-info-card" id="emp-info-card"></div>
-      </div>
-      <div class="panel performance-panel">
-        <div class="panel-head"><div><span class="eyebrow" data-i18n="perfDetail.eyebrow">الأداء</span><h2 data-i18n="perfDetail.title">تفاصيل التارجت والأداء</h2></div></div>
-        <div class="emp-info-card" id="emp-perf-card"></div>
-      </div>
-    </section>
-
-    <section class="panel supervisor-target-panel" id="supervisor-target-panel" style="display:none">
-      <div class="panel-head"><div><span class="eyebrow" data-i18n="sup.eyebrow">الإشراف</span><h2 data-i18n="sup.title">تفاصيل تارجت الاشراف</h2></div></div>
-      <div id="supervisor-target-container"></div>
-    </section>
-
-     <section class="panel detail-panel" id="detail-panel" style="display:none">
-       <div class="panel-head detail-head-row"><div><span class="eyebrow" data-i18n="detail.eyebrow">التفاصيل اليومية</span><h2 data-i18n="detail.title">التفاصيل اليومية</h2></div><div class="detail-actions employee-detail-actions" id="employee-detail-actions" style="display:none"><button class="excel-btn" id="employee-detail-excel" title="تحميل تفاصيل الموظف Excel" aria-label="تحميل تفاصيل الموظف Excel"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" aria-hidden="true"><path d="M6 22a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h8a2.4 2.4 0 0 1 1.704.706l3.588 3.588A2.4 2.4 0 0 1 20 8v12a2 2 0 0 1-2 2z"></path><path d="M14 2v5a1 1 0 0 0 1 1h5"></path><path d="M8 13h2"></path><path d="M14 13h2"></path><path d="M8 17h2"></path><path d="M14 17h2"></path></svg> تحميل Excel</button><button class="pdf-btn" id="employee-detail-pdf" title="تحميل تفاصيل الموظف PDF" aria-label="تحميل تفاصيل الموظف PDF"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" aria-hidden="true"><path d="M6 22a2 2 0 0 1-2-2V4a2.4 2.4 0 0 1 1.704-2L20 8v12a2 2 0 0 1-2 2z"></path><path d="M14 2v5a1 1 0 0 0 1 1h5"></path><path d="M10 9H8"></path><path d="M16 13H8"></path><path d="M16 17H8"></path></svg> تحميل PDF</button></div></div>
-      <div class="table-wrap"><table><thead><tr id="detail-head"></tr></thead><tbody id="detail-body"></tbody></table></div>
-    </section>
-
      <section class="panel employee-links-panel" id="employee-links-panel" style="display:none">
        <div class="panel-head"><div><span class="eyebrow">روابط الموظف</span><h2>خدمات مهمة</h2><p>وصول سريع إلى الخدمات واللوائح المرتبطة بعملك.</p></div></div>
        <div class="employee-links-grid">
@@ -110,6 +89,28 @@
          </a>
        </div>
      </section>
+
+    <section class="dashboard-grid" id="self-view-grid" style="display:none">
+      <div class="panel employee-panel">
+        <div class="panel-head"><div><span class="eyebrow" data-i18n="emp.eyebrow">بيانات الموظف</span><h2 data-i18n="emp.title">بيانات الموظف</h2></div></div>
+        <div class="emp-info-card" id="emp-info-card"></div>
+      </div>
+      <div class="panel performance-panel">
+        <div class="panel-head"><div><span class="eyebrow" data-i18n="perfDetail.eyebrow">الأداء</span><h2 data-i18n="perfDetail.title">تفاصيل التارجت والأداء</h2></div></div>
+        <div class="emp-info-card" id="emp-perf-card"></div>
+      </div>
+    </section>
+
+    <section class="panel supervisor-target-panel" id="supervisor-target-panel" style="display:none">
+      <div class="panel-head"><div><span class="eyebrow" data-i18n="sup.eyebrow">الإشراف</span><h2 data-i18n="sup.title">تفاصيل تارجت الاشراف</h2></div></div>
+      <div id="supervisor-target-container"></div>
+    </section>
+
+     <section class="panel detail-panel" id="detail-panel" style="display:none">
+       <div class="panel-head detail-head-row"><div><span class="eyebrow" data-i18n="detail.eyebrow">التفاصيل اليومية</span><h2 data-i18n="detail.title">التفاصيل اليومية</h2></div><div class="detail-actions report-actions attendance-export-actions employee-detail-actions" id="employee-detail-actions" style="display:none"><button class="excel-btn" id="employee-detail-excel" title="تحميل تفاصيل الموظف Excel" aria-label="تحميل تفاصيل الموظف Excel"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" aria-hidden="true"><path d="M6 22a2 2 0 0 1-2-2V4a2.4 2.4 0 0 1 2-2h8a2.4 2.4 0 0 1 1.704.706l3.588 3.588A2.4 2.4 0 0 1 20 8v12a2 2 0 0 1-2 2z"></path><path d="M14 2v5a1 1 0 0 0 1 1h5"></path><path d="M8 13h2"></path><path d="M14 13h2"></path><path d="M8 17h2"></path><path d="M14 17h2"></path></svg> تحميل Excel</button><button class="pdf-btn" id="employee-detail-pdf" title="تحميل تفاصيل الموظف PDF" aria-label="تحميل تفاصيل الموظف PDF"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" aria-hidden="true"><path d="M6 22a2 2 0 0 1-2-2V4a2.4 2.4 0 0 1 1.704-2L20 8v12a2 2 0 0 1-2 2v12a2 2 0 0 1-2 2z"></path><path d="M14 2v5a1 1 0 0 0 1 1h5"></path><path d="M10 9H8"></path><path d="M16 13H8"></path><path d="M16 17H8"></path></svg> تحميل PDF</button></div></div>
+      <div class="table-wrap"><table><thead><tr id="detail-head"></tr></thead><tbody id="detail-body"></tbody></table></div>
+    </section>
+
     
 <section class="panel company-summary-panel" id="company-summary-panel" style="display:none"><div class="panel-head"><div><span class="eyebrow">ملخص الشركات</span><h2>ملخص أداء الشركات</h2><p>عرض سريع لأعداد الموظفين والحضور والغياب ونسبة الحضور.</p></div></div><div class="table-wrap"><table class="attendance-table"><thead><tr><th>الشركة</th><th>عدد الموظفين</th><th>الحضور</th><th>الغياب</th><th>حضور الخريجين</th><th>غياب الخريجين</th><th>حضور الطلاب</th><th>غياب الطلاب</th><th>نسبة الحضور</th></tr></thead><tbody id="company-summary-body"></tbody></table></div></section>
 <section class="panel daily-panel"><div class="panel-head"><div><span class="eyebrow">المتابعة اليومية</span><h2>الحضور يومًا بيوم</h2><p>تفصيل يومي لنتائج الفترة المحددة.</p></div></div><div class="table-wrap"><table class="attendance-table"><thead><tr><th>التاريخ</th><th>اليوم</th><th>الإجمالي الحضور</th><th>إجمالي الغياب</th><th>إجازة عارضة</th><th>إجازة بإذن</th><th>إجازة بدون إذن</th><th>إجازة مرضي</th><th>نسبة الحضور</th></tr></thead><tbody id="daily-body"></tbody></table></div></section>
