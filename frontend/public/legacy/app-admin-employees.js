@@ -211,7 +211,7 @@ function renderTable(list) {
       <td>${statusBadgeHtml(e.status)}</td>
       <td class="emp-actions-cell">
         <button class="row-icon-btn info-btn" data-action="view" title="عرض بيانات الموظف كما تظهر له">${miniIcon('view')}</button>
-        ${isCreator ? `<button class="row-icon-btn" data-action="edit" title="تعديل">${miniIcon('edit')}</button><button class="row-icon-btn" data-action="pw" title="كلمة المرور">${miniIcon('key')}</button><button class="row-icon-btn" data-action="reset" title="إعادة التعيين">${miniIcon('reset')}</button><button class="row-icon-btn" data-action="departure" title="تسجيل مغادرة">${miniIcon('reset')}</button><button class="row-icon-btn danger-icon" data-action="delete" title="حذف">${miniIcon('delete')}</button>` : ''}
+        ${isCreator ? `<button class="row-icon-btn" data-action="edit" title="تعديل">${miniIcon('edit')}</button><button class="row-icon-btn" data-action="pw" title="كلمة المرور">${miniIcon('key')}</button><button class="row-icon-btn" data-action="reset" title="إعادة التعيين">${miniIcon('reset')}</button><button class="row-icon-btn danger-icon" data-action="delete" title="حذف">${miniIcon('delete')}</button>` : ''}
       </td>
     </tr>`).join('');
   updateSelectAllState();
