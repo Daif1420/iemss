@@ -58,6 +58,7 @@ function addFiles(fileList){
     }
   }
   renderSelectedFiles();
+  buildSheetPreview();
   const status=$('master-upload-status');
   if(skippedNonXlsx>0){status.className='upload-status error';status.textContent=`تم تجاهل ${skippedNonXlsx} ملف/ملفات لأنها ليست بصيغة XLSX.`}
   else if(status.classList.contains('error')){status.className='upload-status';status.textContent=''}
@@ -71,6 +72,54 @@ file.onchange=()=>{addFiles(file.files);file.value=''};
 ;['dragleave','drop'].forEach(evt=>dropzone.addEventListener(evt,e=>{e.preventDefault();e.stopPropagation();dropzone.classList.remove('drag-over')}));
 dropzone.addEventListener('drop',e=>{const dt=e.dataTransfer;if(!dt||!dt.files||!dt.files.length)return;addFiles(dt.files)});
 function readAsDataUrl(f){return new Promise((resolve,reject)=>{const r=new FileReader();r.onload=()=>resolve(r.result);r.onerror=()=>reject(new Error(`تعذّر قراءة الملف "${f.name}".`));r.readAsDataURL(f)})}
+
+let xlsxPromise=null;
+function ensureXLSX(){
+  if(window.XLSX)return Promise.resolve(window.XLSX);
+  if(xlsxPromise)return xlsxPromise;
+  xlsxPromise=new Promise((resolve,reject)=>{
+    const sc=document.createElement('script');
+    sc.src='https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js';
+    sc.onload=()=>window.XLSX?resolve(window.XLSX):reject(new Error('تعذر تحميل أداة قراءة Excel.'));
+    sc.onerror=()=>reject(new Error('تعذر تحميل أداة معاينة Excel.'));
+    document.head.appendChild(sc);
+  });
+  return xlsxPromise;
+}
+function cellText(v){
+  if(v===null||v===undefined)return '';
+  if(v instanceof Date)return v.toLocaleDateString('ar-EG');
+  return String(v);
+}
+async function buildSheetPreview(){
+  const panel=$('sheet-preview-panel'),container=$('sheet-preview-container'),status=$('preview-status'),btn=$('master-upload-btn');
+  if(!panel||!container||!btn)return;
+  if(!selectedFiles.length){panel.style.display='none';btn.disabled=true;return;}
+  panel.style.display='block';container.innerHTML='<div class="sheet-preview-empty">جارٍ تجهيز المعاينة…</div>';status.textContent='جاري القراءة';btn.disabled=true;
+  try{
+    const XLSX=await ensureXLSX();
+    const blocks=[];
+    for(const f of selectedFiles){
+      const buffer=await f.arrayBuffer();
+      const wb=XLSX.read(buffer,{type:'array',cellDates:true});
+      const sheetName=wb.SheetNames[0];
+      const ws=wb.Sheets[sheetName];
+      const rows=XLSX.utils.sheet_to_json(ws,{header:1,defval:'',raw:true,blankrows:false});
+      const visible=rows.slice(0,26);
+      const width=Math.min(Math.max(...visible.map(r=>r.length),1),24);
+      const head=visible[0]||[];
+      const table=visible.length?`<div class="sheet-preview-scroll"><table class="sheet-preview-table"><thead><tr>${Array.from({length:width},(_,i)=>`<th>${esc(cellText(head[i])||`عمود ${i+1}`)}</th>`).join('')}</tr></thead><tbody>${visible.slice(1).map(r=>`<tr>${Array.from({length:width},(_,i)=>`<td>${esc(cellText(r[i]))}</td>`).join('')}</tr>`).join('')}</tbody></table></div>`:'<div class="sheet-preview-empty">الشيت فارغ.</div>';
+      blocks.push(`<article class="sheet-preview-file"><div class="sheet-preview-file-head"><strong>${esc(f.name)}</strong><small>Sheet: ${esc(sheetName)} · ${Math.max(rows.length-1,0).toLocaleString('en-US')} صف · عرض أول 25 صفاً</small></div>${table}</article>`);
+    }
+    container.innerHTML=blocks.join('');
+    status.textContent=`تمت المعاينة بنجاح · ${selectedFiles.length} ملف`;
+    btn.disabled=false;
+  }catch(e){
+    container.innerHTML=`<div class="sheet-preview-empty">تعذر إنشاء المعاينة: ${esc(e.message)}</div>`;
+    status.textContent='المعاينة فشلت';
+    btn.disabled=true;
+  }
+}
 
 
 async function loadImportHistory(){
@@ -134,7 +183,7 @@ $('master-upload-btn').onclick=async()=>{
       status.textContent=`تعذّر تحديث أي ملف. ${failed.map(r=>`${r.fileName}: ${r.message}`).join('، ')}`;
     }
 
-    selectedFiles=[];file.value='';renderSelectedFiles();
+    selectedFiles=[];file.value='';renderSelectedFiles(); $('sheet-preview-panel').style.display='none'; $('sheet-preview-container').innerHTML=''; $('preview-status').textContent=''; btn.disabled=true;
   }finally{
     btn.disabled=false;
   }

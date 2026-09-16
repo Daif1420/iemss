@@ -697,11 +697,20 @@ function kpis(t){
     ['نسبة الغياب',pct(t.total?t.absent/t.total*100:0),'absence-rate','rate'],
     ['الغياب بدون إذن',t.unauthorized,'unauthorized','unauthorized']
   ];
-  $('attendance-kpis').innerHTML=rows.map((x,i)=>{
+  // Keep all 12 Home KPIs in ONE grid: 7 overview cards + 5 attendance cards.
+  // The old implementation rendered them in two separate grids, which made
+  // the desktop layout break into inconsistent rows.
+  const target=$('kpi-grid');
+  if(!target)return;
+  const cards=rows.map((x,i)=>{
     const [label,val,cls,icon]=x;
     const value=typeof val==='string'?val:num(val);
-    return shared.kpiCard(label,value,cls,icon,shared.KPI_TREND_SHAPES[i]);
+    return shared.kpiCard(label,value,cls,icon,shared.KPI_TREND_SHAPES[i+7]);
   }).join('');
+  const wrappers=[...target.querySelectorAll('.kpi-link-wrap')];
+  target.insertAdjacentHTML('beforeend',cards);
+  const attendance=$('attendance-kpis');
+  if(attendance) attendance.innerHTML='';
 }
 function line(rows){const s=$('attendance-line-chart');if(!s)return;if(!rows.length){s.innerHTML='<text x="450" y="165" text-anchor="middle" class="att-axis-text">لا توجد بيانات</text>';return}const W=900,H=330,L=48,R=20,T=18,B=44,pw=W-L-R,ph=H-T-B,x=i=>L+(rows.length===1?pw/2:i/(rows.length-1)*pw),y=v=>T+ph-(Math.max(0,Math.min(100,+v||0))/100)*ph;let g=[0,25,50,75,100].map(v=>`<line x1="${L}" y1="${y(v)}" x2="${W-R}" y2="${y(v)}" class="att-grid-line"/><text x="${L-8}" y="${y(v)+4}" text-anchor="end" class="att-axis-text">${v}%</text>`).join(''),path=k=>rows.map((r,i)=>`${i?'L':'M'} ${x(i).toFixed(1)} ${y(r[k]).toFixed(1)}`).join(' '),dots=(k,c)=>rows.map((r,i)=>`<circle cx="${x(i)}" cy="${y(r[k])}" r="4" class="${c}"/>`).join(''),labels=rows.map((r,i)=>`<text x="${x(i)}" y="${H-14}" text-anchor="middle" class="att-axis-text">${esc(r.date.slice(5))}</text>`).join('');s.innerHTML=g+`<path d="${path('attendance_rate')}" class="att-present-line"/><path d="${path('absence_rate')}" class="att-absent-line"/>${dots('attendance_rate','att-present-dot')}${dots('absence_rate','att-absent-dot')}${labels}`}
 function bars(id,rows){const e=$(id),a=(rows||[]).slice(0,10);if(!e)return;if(!a.length){e.innerHTML='<div class="empty-attendance">لا توجد بيانات</div>';return}e.innerHTML=a.map(r=>{const t=+r.present+(+r.absent),p=t?(+r.present/t*100):0;return`<div class="bar-row"><span class="bar-label" title="${esc(r.name)}">${esc(r.name)}</span><div class="bar-track"><span class="bar-segment bar-present" style="width:${p}%"></span><span class="bar-segment bar-absent" style="width:${100-p}%"></span></div><span class="bar-value">${num(t)}</span></div>`}).join('')}
