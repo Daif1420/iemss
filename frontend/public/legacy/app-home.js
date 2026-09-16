@@ -41,13 +41,19 @@ async function loadSystemBanner() {
   try {
     const token = sessionStorage.getItem('iems_token');
     if (!token) return;
-    const res = await fetch('/api/admin/banner', { headers: { Authorization: 'Bearer ' + token } });
+    const res = await fetch('/api/admin/banner/image', { headers: { Authorization: 'Bearer ' + token } });
     if (!res.ok) return;
-    const data = await res.json();
-    if (data.banner && document.getElementById('system-banner')) {
-      document.getElementById('system-banner').src = data.banner;
-      document.getElementById('system-banner-wrap').style.display = 'block';
-    }
+    const image = document.getElementById('system-banner');
+    const wrap = document.getElementById('system-banner-wrap');
+    if (!image || !wrap) return;
+
+    const objectUrl = URL.createObjectURL(await res.blob());
+    image.onload = () => { wrap.style.display = 'block'; };
+    image.onerror = () => {
+      URL.revokeObjectURL(objectUrl);
+      wrap.style.display = 'none';
+    };
+    image.src = objectUrl;
   } catch (_) {}
 }
 const token = sessionStorage.getItem('iems_token');

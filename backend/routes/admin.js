@@ -1072,10 +1072,37 @@ router.get('/audit-logs', requireAuth, requireSystemCreator, async (req, res) =>
   res.json({ logs: rows.map(r => ({ ...r, details: r.details_json || {} })) });
 });
 
+function getBannerPayload(row) {
+  let value = row?.value_json || {};
+  // PostgreSQL normally returns JSONB as an object, but older deployments
+  // may have stored the JSON payload as text.
+  if (typeof value === 'string') {
+    try { value = JSON.parse(value); } catch (_) { value = {}; }
+  }
+  return value && typeof value === 'object' ? value : {};
+}
+
 router.get('/banner', requireAuth, async (req, res) => {
   const row = await db.prepare(`SELECT value_json FROM system_settings WHERE key = 'home_banner'`).get();
-  const value = row?.value_json || {};
+  const value = getBannerPayload(row);
   res.json({ banner: value.data || null, filename: value.filename || null, updated_at: value.updated_at || null });
+});
+
+// The home page uses the binary endpoint so it does not have to download a
+// multi-megabyte base64 JSON response just to display an image.
+router.get('/banner/image', requireAuth, async (req, res) => {
+  const row = await db.prepare(`SELECT value_json FROM system_settings WHERE key = 'home_banner'`).get();
+  const value = getBannerPayload(row);
+  const match = String(value.data || '').match(/^data:(image\/(?:png|jpe?g|webp));base64,([A-Za-z0-9+/=\s]+)$/i);
+  if (!match) return res.status(404).end();
+
+  const buffer = Buffer.from(match[2].replace(/\s/g, ''), 'base64');
+  if (!buffer.length) return res.status(404).end();
+  res.set({
+    'Content-Type': match[1].toLowerCase() === 'image/jpg' ? 'image/jpeg' : match[1].toLowerCase(),
+    'Cache-Control': 'private, no-store',
+  });
+  return res.send(buffer);
 });
 
 router.put('/banner', requireAuth, requireSystemCreator, async (req, res) => {
