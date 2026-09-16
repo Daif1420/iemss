@@ -108,6 +108,16 @@
   // this file hid Reports from them, and the pages themselves allowed
   // supervisors on Reports but not Manual Entry) — so links either vanished
   // or bounced the user back to the home page.
+  // Unified product credit footer on every authenticated page.
+  const pageMain = document.querySelector('main.container');
+  if (pageMain && !pageMain.querySelector('.iems-credit-footer')) {
+    const oldLegal = pageMain.querySelector('.legal');
+    const footer = document.createElement('footer');
+    footer.className = 'iems-credit-footer';
+    footer.innerHTML = '<span>© 2026 IEMS</span><span>Product Design &amp; Development by</span><strong>Mohamed H. Daif</strong>';
+    if (oldLegal) oldLegal.replaceWith(footer); else pageMain.appendChild(footer);
+  }
+
   const role = user?.role || null;
   const CREATOR = role === 'system_creator';
   const ADMIN_UP = CREATOR || role === 'admin';

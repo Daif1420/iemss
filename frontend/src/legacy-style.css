@@ -1040,7 +1040,7 @@ html[data-theme="dark"] .glass{background:rgba(14,20,30,.82);box-shadow:0 26px 7
 .import-history-table td,.import-history-table th{white-space:nowrap}
 @media(max-width:680px){.hero #my-account-btn{align-self:flex-start;margin-top:8px}.import-history-table{font-size:11px}}
 
-.kpi-grid .kpi-card2[data-kpi-group]{cursor:pointer}.kpi-card2.left-kpi{--accent:#C1554F!important}.kpi-card2.new-kpi{--accent:#3C9A63!important}@media(min-width:761px){.kpi-grid{grid-template-columns:repeat(3,minmax(0,1fr))!important}}
+.kpi-grid .kpi-link-wrap{cursor:pointer;min-width:0}.kpi-card2.left-kpi{--accent:#C1554F!important}.kpi-card2.new-kpi{--accent:#3C9A63!important}.kpi-link-wrap:focus-visible{outline:2px solid var(--primary);outline-offset:3px;border-radius:20px}
 
 /* Employees navigation dropdown */
 .employee-nav-menu{position:absolute;top:calc(100% + 8px);right:0;min-width:210px;padding:7px;background:var(--panel);border:1px solid var(--line);border-radius:14px;box-shadow:0 18px 45px rgba(15,23,42,.14);display:none;z-index:1000}
@@ -1055,10 +1055,13 @@ html[data-theme="dark"] .glass{background:rgba(14,20,30,.82);box-shadow:0 26px 7
 .supervisor-shift-options label:has(input:checked){border-color:var(--primary);background:rgba(6,91,171,.08);color:var(--primary)}
 .supervisor-shift-options input{accent-color:var(--primary)}
 @media(max-width:760px){.supervisor-shift-options{grid-template-columns:1fr 1fr}.employee-nav-menu{right:auto;left:0}}
-/* Compact desktop system banner: keep the whole image visible without making it dominate the dashboard. */
-.system-banner-wrap{max-height:190px!important;border-radius:14px!important}
-.system-banner{max-height:190px!important;width:100%!important;height:auto!important;object-fit:contain!important;object-position:center!important}
-@media(max-width:760px){.system-banner-wrap{max-height:140px!important}.system-banner{max-height:140px!important}}
 /* Full employee detail page: content should never be clipped by the old modal-oriented rules. */
 .employee-detail-page .container{padding-bottom:40px}
 .employee-detail-page .panel{overflow:visible}
+
+.departure-modal{position:fixed;inset:0;background:rgba(8,25,45,.38);backdrop-filter:blur(5px);display:none;align-items:center;justify-content:center;padding:20px;z-index:5000}.departure-modal.open{display:flex}.departure-modal-card{width:min(620px,100%);background:var(--panel);border:1px solid var(--line);border-radius:20px;box-shadow:0 24px 70px rgba(0,0,0,.2);padding:22px}.departure-modal-head{display:flex;align-items:flex-start;justify-content:space-between;gap:15px;margin-bottom:22px}.departure-modal-head h2{margin:4px 0;font-size:20px}.departure-modal-head p{margin:0;color:var(--muted);font-size:11px;font-weight:700}.departure-form-grid{display:grid;grid-template-columns:1fr 1fr;gap:14px}.departure-field{display:flex;flex-direction:column;gap:7px}.departure-field label{font-size:11px;font-weight:800;color:var(--muted)}.departure-field input,.departure-field select{height:46px;border:1px solid var(--line);border-radius:11px;background:var(--soft);color:var(--text);padding:0 12px;font-family:'Cairo',sans-serif;font-weight:700;outline:none}.departure-field input:focus,.departure-field select:focus{border-color:var(--primary);box-shadow:0 0 0 3px rgba(6,91,171,.08)}.departure-modal-actions{display:flex;justify-content:flex-end;gap:10px;margin-top:20px}.departure-error{min-height:20px;color:var(--danger);font-size:11px;font-weight:800;margin-top:12px}.departure-btn{color:var(--primary)!important}@media(max-width:680px){.departure-form-grid{grid-template-columns:1fr}.departure-modal-card{padding:18px}.departure-modal-actions{flex-direction:column-reverse}.departure-modal-actions button{width:100%}}
+
+.iems-credit-footer{width:100%;display:flex;align-items:center;justify-content:center;gap:6px;flex-wrap:wrap;text-align:center;margin:24px auto 4px;padding:14px 12px 8px;color:var(--muted);font-family:'Cairo',Arial,sans-serif;font-size:10px;font-weight:700;line-height:1.7}.iems-credit-footer span:first-child{color:var(--primary);font-weight:900}.iems-credit-footer strong{color:var(--primary-2,var(--primary));font-weight:900}.login-form-side .iems-credit-footer{margin-top:28px}.login-form-side .form-wrap{min-height:100%;display:flex;flex-direction:column;justify-content:center}.login-form-side .iems-credit-footer{flex:none}@media(max-width:760px){.iems-credit-footer{font-size:9px;margin-top:18px}.login-form-side .iems-credit-footer{margin-top:22px}}
+
+/* KPI links: keep the original KPI card itself as the visual surface. */
+.kpi-grid>.kpi-link-wrap{min-height:0!important;padding:0!important;background:transparent!important;border:0!important;border-radius:0!important;box-shadow:none!important;display:block!important;overflow:visible!important}.kpi-grid>.kpi-link-wrap:hover{transform:none!important;box-shadow:none!important;border-color:transparent!important}.kpi-grid>.kpi-link-wrap>.kpi-card2{width:100%;box-sizing:border-box}
