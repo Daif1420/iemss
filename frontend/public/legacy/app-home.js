@@ -12,6 +12,22 @@
     .merged-target-percent-value{font-size:26px;font-weight:900;color:#065BAB;line-height:1}
     .merged-target-percent-label{font-size:11px;font-weight:800;color:var(--muted);opacity:.85}
     html[data-theme="dark"] .merged-target-percent-value{color:#3B9BFF}
+    .merged-target-percent.pct-red{border-color:#E53935;background:rgba(229,57,53,.08)}
+    .merged-target-percent.pct-red .merged-target-percent-value{color:#E53935}
+    .merged-target-percent.pct-yellow{border-color:#F2C744;background:rgba(242,199,68,.12)}
+    .merged-target-percent.pct-yellow .merged-target-percent-value{color:#B8860B}
+    .merged-target-percent.pct-green{border-color:#43A047;background:rgba(67,160,71,.08)}
+    .merged-target-percent.pct-green .merged-target-percent-value{color:#43A047}
+    html[data-theme="dark"] .merged-target-percent.pct-red .merged-target-percent-value{color:#FF6B6B}
+    html[data-theme="dark"] .merged-target-percent.pct-yellow .merged-target-percent-value{color:#FFD54F}
+    html[data-theme="dark"] .merged-target-percent.pct-green .merged-target-percent-value{color:#66D97C}
+    .stage-pct-cell{font-weight:800}
+    .stage-pct-cell.pct-red{color:#E53935}
+    .stage-pct-cell.pct-yellow{color:#B8860B}
+    .stage-pct-cell.pct-green{color:#43A047}
+    html[data-theme="dark"] .stage-pct-cell.pct-red{color:#FF6B6B}
+    html[data-theme="dark"] .stage-pct-cell.pct-yellow{color:#FFD54F}
+    html[data-theme="dark"] .stage-pct-cell.pct-green{color:#66D97C}
     .employee-welcome-content{display:grid;grid-template-columns:minmax(260px,.85fr) minmax(0,1.6fr);gap:24px;align-items:stretch;margin:0 0 18px;padding:26px;border:1px solid var(--line);border-radius:22px;background:linear-gradient(135deg,rgba(6,91,171,.10),rgba(6,91,171,.025) 55%,var(--panel));box-shadow:0 14px 38px rgba(15,23,42,.06);overflow:hidden;position:relative}
     .employee-welcome-content:before{content:"";position:absolute;width:260px;height:260px;border-radius:50%;inset:auto -90px -120px auto;background:radial-gradient(circle,rgba(6,91,171,.18),transparent 68%);pointer-events:none}
     .employee-welcome-copy{display:flex;flex-direction:column;justify-content:center;position:relative;z-index:1}
@@ -111,6 +127,16 @@ function fmtPercent(v) {
   const n = Number(v);
   if (!Number.isFinite(n)) return '—';
   return Math.round(n * 100) + '%';
+}
+// Same color bands used in the source sheet: 0-50% red, 50-70% yellow, 70%+ green.
+function pctColorClass(v) {
+  if (v === null || v === undefined || v === '') return '';
+  const n = Number(v);
+  if (!Number.isFinite(n)) return '';
+  const pct = n * 100;
+  if (pct < 50) return 'pct-red';
+  if (pct < 70) return 'pct-yellow';
+  return 'pct-green';
 }
 
 // Theme
@@ -530,11 +556,20 @@ async function loadSelfView(dashData) {
     const shiftProfiles = Array.isArray(data.shiftProfiles) ? data.shiftProfiles : [];
     const normalizedProfiles = shiftProfiles.map(p => {
       const stageMap = {};
+      const totalsMap = {};
       (p.stages || []).forEach(st => {
         if (!st || !st.role) return;
         stageMap[st.role] = Object.entries(st.daily || {}).map(([date, value]) => ({ date, value }));
+        const achievement = Number(st.achievement), target = Number(st.target);
+        totalsMap[st.role] = {
+          achievement: Number.isFinite(achievement) ? achievement : null,
+          target: Number.isFinite(target) ? target : null,
+          // Computed from this stage's own achievement/target (AN/AO), same as the
+          // sheet — not the AP column, which is only ever populated for الحضور.
+          percentage: Number.isFinite(achievement) && Number.isFinite(target) && target > 0 ? achievement / target : null,
+        };
       });
-      return { shift: p.shift || 'Other', stages: stageMap, summary: p.summary || {}, employee: p.employee || {} };
+      return { shift: p.shift || 'Other', stages: stageMap, stageTotals: totalsMap, summary: p.summary || {}, employee: p.employee || {} };
     });
 
     function renderShiftDetail(profile, showShiftHeading) {
@@ -542,9 +577,14 @@ async function loadSelfView(dashData) {
       const totalTargetEntry = allStageEntries.find(([name]) => String(name).trim().toUpperCase() === 'TOTAL TARGET %');
       const stageEntries = allStageEntries.filter(([name, rows]) => {
         if (String(name).trim().toUpperCase() === 'TOTAL TARGET %') return false;
-        if (String(name).trim() === 'الحضور') return false;
         return (rows || []).some(r => r.value !== null && r.value !== undefined && r.value !== '');
-      }).sort(([a], [b]) => String(a).localeCompare(String(b), 'ar'));
+      }).sort(([a], [b]) => {
+        // Keep الحضور (attendance) pinned to the top of the shift's stage table.
+        const aAtt = String(a).trim() === 'الحضور', bAtt = String(b).trim() === 'الحضور';
+        if (aAtt && !bAtt) return -1;
+        if (bAtt && !aAtt) return 1;
+        return String(a).localeCompare(String(b), 'ar');
+      });
 
       const dateSet = new Set();
       stageEntries.forEach(([, rows]) => rows.forEach(r => dateSet.add(r.date)));
@@ -552,10 +592,10 @@ async function loadSelfView(dashData) {
       const dates = [...dateSet].sort();
       const periodPercent = fmtPercent(Number(profile.summary?.monthly_target));
       const totalRowCount = stageEntries.length + (totalTargetEntry ? 1 : 0);
-      const head = '<th>المرحلة</th>' + dates.map(d => `<th>${escapeHtml(d.slice(5))}</th>`).join('') + '<th>الإجمالي</th><th>النسبة</th>';
+      const head = '<th>المرحلة</th>' + dates.map(d => `<th>${escapeHtml(d.slice(5))}</th>`).join('') + '<th>الإجمالي</th><th>نسبة إنجاز المرحلة</th><th>النسبة</th>';
 
       if (!stageEntries.length && !totalTargetEntry) {
-        return `${showShiftHeading ? `<div class="shift-detail-heading"><span>تفاصيل Shift ${escapeHtml(profile.shift)}</span></div>` : ''}<div class="table-wrap"><table><thead><tr>${head}</tr></thead><tbody><tr><td colspan="${dates.length + 3}"><div class="empty-state">لا توجد بيانات مطابقة.</div></td></tr></tbody></table></div>`;
+        return `${showShiftHeading ? `<div class="shift-detail-heading"><span>تفاصيل Shift ${escapeHtml(profile.shift)}</span></div>` : ''}<div class="table-wrap"><table><thead><tr>${head}</tr></thead><tbody><tr><td colspan="${dates.length + 4}"><div class="empty-state">لا توجد بيانات مطابقة.</div></td></tr></tbody></table></div>`;
       }
 
       const stageRows = stageEntries.map(([stageName, rows], idx) => {
@@ -567,8 +607,13 @@ async function loadSelfView(dashData) {
           if (typeof v === 'number' && Number.isFinite(v)) { sum += v; hasNum = true; return `<td class="cell-present">${fmtAttendanceNumber(v)}</td>`; }
           return `<td class="cell-present">${escapeHtml(v)}</td>`;
         }).join('');
-        const percentCell = idx === 0 ? `<td rowspan="${totalRowCount}" class="merged-target-percent"><div class="merged-target-percent-inner"><b class="merged-target-percent-value">${periodPercent}</b><span class="merged-target-percent-label">النسبة الإجمالية</span></div></td>` : '';
-        return `<tr><td><b>${escapeHtml(stageName)}</b></td>${cells}<td>${hasNum ? fmtAttendanceNumber(sum) : '—'}</td>${percentCell}</tr>`;
+        // Per-stage completion %, computed from this stage's own achievement/target
+        // (AN/AO in the sheet), colored with the same red/yellow/green bands.
+        const stageTotal = (profile.stageTotals || {})[stageName];
+        const stagePct = stageTotal && stageTotal.percentage != null ? stageTotal.percentage : null;
+        const stagePctCell = `<td class="stage-pct-cell ${pctColorClass(stagePct)}">${stagePct != null ? fmtPercent(stagePct) : '—'}</td>`;
+        const percentCell = idx === 0 ? `<td rowspan="${totalRowCount}" class="merged-target-percent ${pctColorClass(profile.summary?.monthly_target)}"><div class="merged-target-percent-inner"><b class="merged-target-percent-value">${periodPercent}</b><span class="merged-target-percent-label">النسبة الإجمالية</span></div></td>` : '';
+        return `<tr><td><b>${escapeHtml(stageName)}</b></td>${cells}<td>${hasNum ? fmtAttendanceNumber(sum) : '—'}</td>${stagePctCell}${percentCell}</tr>`;
       });
 
       if (totalTargetEntry) {
@@ -581,8 +626,8 @@ async function loadSelfView(dashData) {
           return Number.isFinite(n) ? `<td class="cell-present total-target-cell">${fmtPercent(n)}</td>` : `<td class="cell-present total-target-cell">${escapeHtml(v)}</td>`;
         }).join('');
         const totalTargetCell = Number.isFinite(Number(profile.summary?.monthly_target)) ? fmtPercent(Number(profile.summary.monthly_target)) : '—';
-        const percentCellForTotalRow = stageEntries.length === 0 ? `<td rowspan="${totalRowCount}" class="merged-target-percent"><div class="merged-target-percent-inner"><b class="merged-target-percent-value">${periodPercent}</b><span class="merged-target-percent-label">النسبة الإجمالية</span></div></td>` : '';
-        stageRows.push(`<tr class="total-target-master-row"><td><b>إجمالي التارجت اليومي</b></td>${cells}<td><b>${totalTargetCell}</b></td>${percentCellForTotalRow}</tr>`);
+        const percentCellForTotalRow = stageEntries.length === 0 ? `<td rowspan="${totalRowCount}" class="merged-target-percent ${pctColorClass(profile.summary?.monthly_target)}"><div class="merged-target-percent-inner"><b class="merged-target-percent-value">${periodPercent}</b><span class="merged-target-percent-label">النسبة الإجمالية</span></div></td>` : '';
+        stageRows.push(`<tr class="total-target-master-row"><td><b>إجمالي التارجت اليومي</b></td>${cells}<td><b>${totalTargetCell}</b></td><td>—</td>${percentCellForTotalRow}</tr>`);
       }
 
       return `${showShiftHeading ? `<div class="shift-detail-heading"><span>تفاصيل Shift ${escapeHtml(profile.shift)}</span></div>` : ''}<div class="table-wrap shift-detail-table"><table><thead><tr>${head}</tr></thead><tbody>${stageRows.join('')}</tbody></table></div>`;
