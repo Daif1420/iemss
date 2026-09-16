@@ -293,7 +293,6 @@ function renderKpis(overview) {
     ['إجمالي شركة برافوس', Number(o.bravos || 0), 'amber', 'company', 'bravos'],
     ['إجمالي الطلاب', Number(o.students || 0), 'purple', 'student', 'students'],
      ['إجمالي الخريجين', Number(o.graduates || 0), 'rose', 'graduate', 'graduates'],
-     ['إجمالي أخرى', Number(o.other || 0), 'slate', 'other', 'other'],
     ['إجمالي المغادرين', Number(o.leftEmployees || 0), 'left-kpi', 'leave', 'left'],
     ['إجمالي الجدد', Number(o.newEmployees || 0), 'new-kpi', 'new', 'new']
   ];
@@ -503,6 +502,10 @@ async function loadSelfView(dashData) {
         <div class="info-item"><span>الفئة</span><b>${escapeHtml(emp.education || '—')}</b></div>`;
     }
 
+    // AP is kept as an imported reference, but the displayed achievement
+    // percentage is calculated from AN / AO so AO remains the denominator.
+    const totalAchievementPercent = achievementPercent(s);
+
     if ($('emp-perf-card')) {
       $('emp-perf-card').innerHTML = `
         <div class="info-item"><span>نسبة التارجت</span><b class="accent-value">${fmtPercent(totalAchievementPercent)}</b></div>
@@ -521,10 +524,6 @@ async function loadSelfView(dashData) {
     // Supervisor target details are employee-visible and follow the same
     // date filter currently selected on Home.
     renderSupervisorTargets(data.supervisorTargets || {});
-
-    // AP is kept as an imported reference, but the displayed achievement
-    // percentage is calculated from AN / AO so AO remains the denominator.
-    const totalAchievementPercent = achievementPercent(s);
 
     if ($('emp-kpi-grid')) {
       const presentDays = Number(s.total_present_days ?? a.present_days ?? 0);
