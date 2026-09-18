@@ -10,6 +10,13 @@
     .detail-date-head{display:flex;flex-direction:column;align-items:center;gap:3px;min-width:62px}.detail-date-head .detail-day{font-size:11px;font-weight:900;color:var(--primary)}.detail-date-head .detail-date{font-size:14px;font-weight:950;color:var(--text);direction:ltr}
     .target-percent{display:inline-flex;align-items:center;justify-content:center;min-width:54px;padding:0;border:none;background:none;border-radius:0;font-weight:950;line-height:1.2}.target-percent-low{color:#e5484d}.target-percent-mid{color:#f2b705}.target-percent-high{color:#0aac5e}
     .total-target-master-row>td{background:color-mix(in srgb,var(--primary) 5%,var(--panel));font-weight:900}.total-target-master-row .total-target-cell{font-weight:950}
+    .daily-details-wrap{display:flex;align-items:flex-start;gap:18px}
+    .overall-percent-badge{flex:0 0 130px;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:6px;padding:18px 10px;text-align:center}
+    .overall-percent{font:950 30px/1.1 'Cairo',sans-serif}
+    .overall-percent-label{font-size:10px;font-weight:900;color:var(--muted)}
+    .overall-percent.target-percent-low{color:#e5484d}.overall-percent.target-percent-mid{color:#f2b705}.overall-percent.target-percent-high{color:#0aac5e}
+    html[data-theme="dark"] .overall-percent.target-percent-low{color:#ff6b6b}html[data-theme="dark"] .overall-percent.target-percent-mid{color:#ffd85e}html[data-theme="dark"] .overall-percent.target-percent-high{color:#4ade80}
+    @media(max-width:680px){.daily-details-wrap{flex-direction:column-reverse}.overall-percent-badge{flex-direction:row;justify-content:flex-start;width:100%}}
     html[data-theme="dark"] .target-percent-low{color:#ff6b6b}html[data-theme="dark"] .target-percent-mid{color:#ffd85e}html[data-theme="dark"] .target-percent-high{color:#4ade80}
     .employee-welcome-content{display:grid;grid-template-columns:minmax(260px,.85fr) minmax(0,1.6fr);gap:24px;align-items:stretch;margin:0 0 18px;padding:26px;border:1px solid var(--line);border-radius:22px;background:linear-gradient(135deg,rgba(6,91,171,.10),rgba(6,91,171,.025) 55%,var(--panel));box-shadow:0 14px 38px rgba(15,23,42,.06);overflow:hidden;position:relative}
     .employee-welcome-content:before{content:"";position:absolute;width:260px;height:260px;border-radius:50%;inset:auto -90px -120px auto;background:radial-gradient(circle,rgba(6,91,171,.18),transparent 68%);pointer-events:none}
@@ -602,12 +609,15 @@ async function loadSelfView(dashData) {
       if (totalTargetEntry) totalTargetEntry[1].forEach(r => dateSet.add(r.date));
       const dates = [...dateSet].sort();
        const totalTarget = Number(profile.summary?.total_target); // Master!AO
-       const periodPercent = fmtPercent(achievementPercent(profile.summary));
        const head = '<th>المرحلة</th>' + dates.map(d => `<th><span class="detail-date-head"><span class="detail-day">${detailWeekday(d)}</span><strong class="detail-date">${escapeHtml(d.slice(8) + '/' + d.slice(5, 7))}</strong></span></th>`).join('') + '<th>الإجمالي</th><th>نسبة الإنجاز</th>';
 
       if (!stageEntries.length && !totalTargetEntry) {
         return `${showShiftHeading ? `<div class="shift-detail-heading"><span>تفاصيل Shift ${escapeHtml(profile.shift)}</span></div>` : ''}<div class="table-wrap"><table><thead><tr>${head}</tr></thead><tbody><tr><td colspan="${dates.length + 3}"><div class="empty-state">لا توجد بيانات مطابقة.</div></td></tr></tbody></table></div>`;
       }
+
+      // النسبة الإجمالية = مجموع نسبة كل مرحلة (إنجازها ÷ تارجتها)، مش قسمة
+      // إجمالي الإنجاز على إجمالي التارجت. نفس حساب صفحة الأدمن بالظبط.
+      let overallPercentSum = 0, hasAnyStagePercent = false;
 
       const stageRows = stageEntries.map(([stageName, rows], idx) => {
         const byDate = Object.fromEntries(rows.map(r => [r.date, r.value]));
@@ -624,10 +634,13 @@ async function loadSelfView(dashData) {
          // row), not the employee's single overall total_target — use it here.
          const stageTarget = Number(profile.stageTargets?.[stageName]);
          const hasStageTarget = Number.isFinite(stageTarget) && stageTarget > 0;
-         const stagePercent = !isAttendance && hasNum && hasStageTarget ? fmtPercent(sum / stageTarget) : '—';
-         const percentCell = `<td>${stagePercent === '—' ? '—' : coloredPercent(sum / stageTarget)}</td>`;
+         const stageRatio = !isAttendance && hasNum && hasStageTarget ? sum / stageTarget : null;
+         if (stageRatio != null) { overallPercentSum += stageRatio; hasAnyStagePercent = true; }
+         const stagePercent = stageRatio != null ? fmtPercent(stageRatio) : '—';
+         const percentCell = `<td>${stagePercent === '—' ? '—' : coloredPercent(stageRatio)}</td>`;
          return `<tr><td><b>${escapeHtml(stageName)}</b></td>${cells}<td>${hasNum ? fmtAttendanceNumber(sum) : '—'}</td>${percentCell}</tr>`;
       });
+      const overallStagePercent = hasAnyStagePercent ? overallPercentSum : null;
 
       if (totalTargetEntry) {
         const rows = totalTargetEntry[1] || [];
@@ -639,11 +652,15 @@ async function loadSelfView(dashData) {
            return Number.isFinite(n) ? `<td class="cell-present total-target-cell">${coloredPercent(n)}</td>` : `<td class="cell-present total-target-cell">${escapeHtml(v)}</td>`;
         }).join('');
          const totalTargetCell = Number.isFinite(totalTarget) ? fmtNumber(totalTarget) : '—';
-         const percentCellForTotalRow = periodPercent === '—' ? '<td>—</td>' : `<td>${coloredPercent(achievementPercent(profile.summary))}</td>`;
+         const percentCellForTotalRow = overallStagePercent == null ? '<td>—</td>' : `<td>${coloredPercent(overallStagePercent)}</td>`;
         stageRows.push(`<tr class="total-target-master-row"><td><b>إجمالي التارجت اليومي</b></td>${cells}<td><b>${totalTargetCell}</b></td>${percentCellForTotalRow}</tr>`);
       }
 
-      return `${showShiftHeading ? `<div class="shift-detail-heading"><span>تفاصيل Shift ${escapeHtml(profile.shift)}</span></div>` : ''}<div class="table-wrap shift-detail-table"><table><thead><tr>${head}</tr></thead><tbody>${stageRows.join('')}</tbody></table></div>`;
+      // بادج "النسبة الإجمالية" الأزرق جنب الجدول، بنفس شكل صفحة الأدمن.
+      const overallBadge = `<div class="overall-percent-badge"><span class="overall-percent ${percentClass(overallStagePercent)}">${fmtPercent(overallStagePercent)}</span><span class="overall-percent-label">النسبة الإجمالية</span></div>`;
+      const table = `<div class="table-wrap shift-detail-table"><table><thead><tr>${head}</tr></thead><tbody>${stageRows.join('')}</tbody></table></div>`;
+
+      return `${showShiftHeading ? `<div class="shift-detail-heading"><span>تفاصيل Shift ${escapeHtml(profile.shift)}</span></div>` : ''}<div class="daily-details-wrap">${overallBadge}${table}</div>`;
     }
 
     const profilesToShow = normalizedProfiles.length > 1 ? normalizedProfiles : [{ shift: emp.shift || 'Other', stages: data.stages || {}, stageTargets: globalStageTargets, summary: s, employee: emp }];

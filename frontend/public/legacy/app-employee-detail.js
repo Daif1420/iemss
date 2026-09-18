@@ -41,21 +41,17 @@
       $('detail-title').textContent = 'بيانات ' + e.name;
       $('detail-info').innerHTML = `<div class="info-item"><span>ID</span><b>${esc(e.id)}</b></div><div class="info-item"><span>الاسم</span><b>${esc(e.name)}</b></div><div class="info-item"><span>الشركة</span><b>${esc(e.company)}</b></div><div class="info-item"><span>الشيفت</span><b>${esc(e.shift)}</b></div><div class="info-item"><span>القسم</span><b>${esc(e.department)}</b></div><div class="info-item"><span>الفئة</span><b>${esc(e.education)}</b></div><div class="info-item"><span>الإقامة</span><b>${esc(e.residence)}</b></div>`;
 
-      // نسبة التارجت هنا = Master!AP الفعلي (summary.percentage) — نفس رقم
-      // الشيت من غير أي حساب. "التارجت الشهري" اتشالت من هنا لأنها في الشيت
-      // نفسه بتساوي نفس رقم النسبة بالظبط (مش رقم منفصل)، فعرضها كان
-      // مكرر ومحيّر. التارجت الشهري الحقيقي موجود لكل مرحلة على حدة —
-      // شايفينه في عمود "التارجت" بجدول التفاصيل اليومية تحت.
-      $('detail-perf').innerHTML = `<div class="info-item"><span>نسبة التارجت</span><b>${coloredPercent(s.percentage)}</b></div><div class="info-item"><span>أيام الحضور</span><b>${n(s.total_present_days ?? a.present_days)}</b></div><div class="info-item"><span>إجمالي الغياب</span><b>${n(s.total_absence)}</b></div><div class="info-item"><span>الإضافي</span><b>${hh(s.overtime_hours)}</b></div><div class="info-item"><span>التأخيرات</span><b>${hh(s.late_hours)}</b></div>`;
-
-      $('detail-overall').innerHTML = `<span class="overall-percent ${percentClass(s.percentage)}">${p(s.percentage)}</span><span class="overall-percent-label">النسبة الإجمالية</span>`;
-
       const allEntries = Object.entries(d.stages || {});
       const totalTargetEntry = allEntries.find(([name]) => String(name).trim().toUpperCase() === 'TOTAL TARGET %');
       const stageEntries = allEntries.filter(([name]) => String(name).trim().toUpperCase() !== 'TOTAL TARGET %');
       const dates = [...new Set(stageEntries.flatMap(([, rs]) => rs.map(x => x.date)))].sort();
 
       $('detail-head').innerHTML = '<th>المرحلة</th>' + dates.map(x => '<th>' + esc(String(x).slice(5)) + '</th>').join('') + '<th>الإجمالي</th><th>التارجت الشهري</th><th>النسبة</th>';
+
+      // النسبة الإجمالية = مجموع نسبة كل مرحلة على حدة (إنجازها ÷ تارجتها)،
+      // مش قسمة إجمالي الإنجاز على إجمالي التارجت. كل مرحلة بتحسب مرة واحدة
+      // هنا وبتتجمع مع بعضها عشان بادج "النسبة الإجمالية" يبقى نفس الرقم.
+      let overallPercentSum = 0, hasAnyStagePercent = false;
 
       const rowsHtml = stageEntries.map(([st, rs]) => {
         const m = Object.fromEntries(rs.map(x => [x.date, x.value]));
@@ -69,9 +65,19 @@
         }).join('');
         const target = isAttendance ? null : Number(stageTargets[st]);
         const hasTarget = Number.isFinite(target) && target > 0;
-        const stagePercent = hasNum && hasTarget ? coloredPercent(sum / target) : '—';
+        const stageRatio = hasNum && hasTarget ? sum / target : null;
+        if (stageRatio != null) { overallPercentSum += stageRatio; hasAnyStagePercent = true; }
+        const stagePercent = stageRatio != null ? coloredPercent(stageRatio) : '—';
         return '<tr><td>' + esc(st) + '</td>' + cells + '<td>' + (hasNum ? n(sum) : '—') + '</td><td>' + (target ? n(target) : '—') + '</td><td>' + stagePercent + '</td></tr>';
       });
+
+      const overallPercent = hasAnyStagePercent ? overallPercentSum : null;
+      $('detail-overall').innerHTML = `<span class="overall-percent ${percentClass(overallPercent)}">${p(overallPercent)}</span><span class="overall-percent-label">النسبة الإجمالية</span>`;
+
+      // نسبة التارجت هنا فوق = نفس مجموع نسب المراحل (زي بادج النسبة
+      // الإجمالية بالظبط)، مش Master!AP. "التارجت الشهري" اتشالت من هنا
+      // لأنها موجودة لكل مرحلة على حدة في عمود "التارجت" بالجدول تحت.
+      $('detail-perf').innerHTML = `<div class="info-item"><span>نسبة التارجت</span><b>${coloredPercent(overallPercent)}</b></div><div class="info-item"><span>أيام الحضور</span><b>${n(s.total_present_days ?? a.present_days)}</b></div><div class="info-item"><span>إجمالي الغياب</span><b>${n(s.total_absence)}</b></div><div class="info-item"><span>الإضافي</span><b>${hh(s.overtime_hours)}</b></div><div class="info-item"><span>التأخيرات</span><b>${hh(s.late_hours)}</b></div>`;
 
       if (totalTargetEntry) {
         const m = Object.fromEntries(totalTargetEntry[1].map(x => [x.date, x.value]));
@@ -81,7 +87,7 @@
           const num = Number(v);
           return '<td>' + (Number.isFinite(num) ? coloredPercent(num) : esc(v)) + '</td>';
         }).join('');
-        rowsHtml.push('<tr class="total-target-row"><td><b>إجمالي التارجت</b></td>' + cells + '<td>—</td><td>—</td><td>' + coloredPercent(s.percentage) + '</td></tr>');
+        rowsHtml.push('<tr class="total-target-row"><td><b>إجمالي التارجت</b></td>' + cells + '<td>—</td><td>—</td><td>' + coloredPercent(overallPercent) + '</td></tr>');
       }
 
       $('detail-body').innerHTML = rowsHtml.join('') || '<tr><td colspan="' + (dates.length + 4) + '"><div class="empty-state">لا توجد بيانات مطابقة.</div></td></tr>';
