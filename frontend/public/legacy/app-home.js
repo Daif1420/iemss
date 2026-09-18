@@ -539,11 +539,10 @@ async function loadSelfView(dashData) {
         canonicalHasPercent = true;
       }
     });
-    const totalAchievementPercent = canonicalHasPercent ? canonicalPercentSum : null;
+    const totalAchievementPercent = canonicalTarget > 0 ? (canonicalAchievement / canonicalTarget) : null;
 
-    // التارجت الشهري في الـKPI = تارجت المراحل + تارجت الإشراف.
-    // مثال: تارجت المراحل 5 + تارجت الإشراف 150 = 155.
-    // في تفاصيل الإشراف، وليس من متغير محلي يتم تعريفه لاحقًا.
+    // نسبة التارجت الشهري في KPI الموظف = إجمالي الإنجاز ÷ إجمالي تارجت المراحل.
+    // تارجت الإشراف لا يدخل في نسبة الموظف العادية.
     const supervisorMonthlyTargetTotal = Object.values(data.supervisorTargets || {})
       .flatMap(rows => rows || [])
       .reduce((sum, r) => {
@@ -577,10 +576,10 @@ async function loadSelfView(dashData) {
       const bonusTier = s.bonus_tier;
       const bonusTierNum = Number(bonusTier);
       const bonusTierDisplay = (bonusTier !== null && bonusTier !== undefined && bonusTier !== '' && Number.isFinite(bonusTierNum)) ? Math.round(bonusTierNum) : bonusTier;
-      const monthlyTargetTotal = (Number.isFinite(canonicalTarget) ? canonicalTarget : 0) + (Number.isFinite(supervisorMonthlyTargetTotal) ? supervisorMonthlyTargetTotal : 0);
-      const hasMonthlyTargetTotal = monthlyTargetTotal !== 0;
+      const monthlyTargetPercent = totalAchievementPercent;
+      const hasMonthlyTargetPercent = Number.isFinite(monthlyTargetPercent);
       const rawKpis = [
-        { label: 'نسبة التارجت الشهري', raw: hasMonthlyTargetTotal ? monthlyTargetTotal : null, display: hasMonthlyTargetTotal ? fmtAttendanceNumber(monthlyTargetTotal) : '—', cls: 'blue', icon: 'rate' },
+        { label: 'نسبة التارجت الشهري', raw: hasMonthlyTargetPercent ? monthlyTargetPercent : null, display: hasMonthlyTargetPercent ? fmtPercent(monthlyTargetPercent) : '—', cls: 'blue', icon: 'rate' },
         { label: 'أيام الحضور', raw: presentDays, display: fmtAttendanceNumber(presentDays), cls: 'teal', icon: 'present' },
         { label: 'أيام الغياب', raw: absenceDays, display: absenceDays, cls: 'amber', icon: 'absent' },
         { label: 'رقم الشريحة', raw: bonusTier, display: bonusTierDisplay, cls: 'purple', icon: 'chart' }
