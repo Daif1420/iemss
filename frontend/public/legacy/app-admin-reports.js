@@ -124,7 +124,7 @@ async function runReport() {
     renderTable(data.employees);
     const stageLabel = stages.length ? stages.join(' + ') : 'كل المراحل';
     $('rep-summary').textContent = `${data.total} موظف اشتغل من ${from} إلى ${to} — المرحلة: ${stageLabel}`;
-    $('rep-target-head').textContent = stages.length ? `تارجت ${stages.join(' + ')}` : 'إجمالي التارجت';
+    $('rep-target-head').textContent = stages.length ? `تارجت ${stages.join(' + ')}` : '';
     $('rep-excel-btn').disabled = data.total === 0;
     $('rep-pdf-btn').disabled = data.total === 0;
   } catch (err) {
@@ -160,12 +160,12 @@ function exportExcel() {
   if (!lastResult || !lastResult.employees.length) return;
   if(!window.XLSX){
     const esc=v=>String(v??'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
-    const stageLabel = stageDisplay(lastResult.stage) ? `تارجت ${stageDisplay(lastResult.stage)}` : 'إجمالي التارجت';
+    const stageLabel = stageDisplay(lastResult.stage) ? `تارجت ${stageDisplay(lastResult.stage)}` : '';
     const rows=[['الاسم','الشركة','الشيفت','القسم',stageLabel],...lastResult.employees.map(e=>[e.name,e.company||'',e.shift||'',e.department||'',Number(e.stage_target)||0])];
     const xml=`<?xml version="1.0"?><Workbook xmlns="urn:schemas-microsoft-com:office:spreadsheet" xmlns:ss="urn:schemas-microsoft-com:office:spreadsheet"><Worksheet ss:Name="Report"><Table>${rows.map(r=>'<Row>'+r.map(v=>`<Cell><Data ss:Type="${typeof v==='number'?'Number':'String'}">${esc(v)}</Data></Cell>`).join('')+'</Row>').join('')}</Table></Worksheet></Workbook>`;
     const blob=new Blob([xml],{type:'application/vnd.ms-excel'});const a=document.createElement('a');a.href=URL.createObjectURL(blob);a.download=reportFilename('xls');a.click();setTimeout(()=>URL.revokeObjectURL(a.href),1000);return;
   }
-  const stageLabel = stageDisplay(lastResult.stage) ? `تارجت ${stageDisplay(lastResult.stage)}` : 'إجمالي التارجت';
+  const stageLabel = stageDisplay(lastResult.stage) ? `تارجت ${stageDisplay(lastResult.stage)}` : '';
   const rows = lastResult.employees.map(e => ({
     'الاسم': e.name,
     'الشركة': e.company || '',
@@ -198,7 +198,7 @@ async function exportPdf() {
   btn.textContent = 'جاري إنشاء PDF...';
 
   const stageLabel = stageDisplay(lastResult.stage) || 'كل المراحل';
-  const targetColLabel = stageDisplay(lastResult.stage) ? `تارجت ${stageDisplay(lastResult.stage)}` : 'إجمالي التارجت';
+  const targetColLabel = stageDisplay(lastResult.stage) ? `تارجت ${stageDisplay(lastResult.stage)}` : '';
   const totalEmployees = Number(lastResult.total) || lastResult.employees.length;
   // Per-employee target figures are daily/period percentages, not additive counts —
   // summing them across employees produces a meaningless number, so the report no

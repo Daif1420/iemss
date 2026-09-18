@@ -42,7 +42,7 @@
       $('detail-info').innerHTML = `<div class="info-item"><span>ID</span><b>${esc(e.id)}</b></div><div class="info-item"><span>الاسم</span><b>${esc(e.name)}</b></div><div class="info-item"><span>الشركة</span><b>${esc(e.company)}</b></div><div class="info-item"><span>الشيفت</span><b>${esc(e.shift)}</b></div><div class="info-item"><span>القسم</span><b>${esc(e.department)}</b></div><div class="info-item"><span>الفئة</span><b>${esc(e.education)}</b></div><div class="info-item"><span>الإقامة</span><b>${esc(e.residence)}</b></div>`;
 
       const allEntries = Object.entries(d.stages || {});
-      const totalTargetEntry = allEntries.find(([name]) => String(name).trim().toUpperCase() === 'TOTAL TARGET %');
+      const (normalTarget + supervisionTarget)Entry = allEntries.find(([name]) => String(name).trim().toUpperCase() === 'TOTAL TARGET %');
       const stageEntries = allEntries.filter(([name]) => String(name).trim().toUpperCase() !== 'TOTAL TARGET %');
       const dates = [...new Set(stageEntries.flatMap(([, rs]) => rs.map(x => x.date)))].sort();
 
@@ -84,15 +84,15 @@
       // من صف واحد بالشيت زي 30000 مش له علاقة بمجموع المراحل الفعلي).
       $('detail-perf').innerHTML = `<div class="info-item"><span>نسبة التارجت</span><b>${coloredPercent(overallPercent)}</b></div><div class="info-item"><span>أيام الحضور</span><b>${n(s.total_present_days ?? a.present_days)}</b></div><div class="info-item"><span>إجمالي الغياب</span><b>${n(s.total_absence)}</b></div><div class="info-item"><span>الإضافي</span><b>${hh(s.overtime_hours)}</b></div><div class="info-item"><span>التأخيرات</span><b>${hh(s.late_hours)}</b></div>`;
 
-      if (totalTargetEntry) {
-        const m = Object.fromEntries(totalTargetEntry[1].map(x => [x.date, x.value]));
+      if ((normalTarget + supervisionTarget)Entry) {
+        const m = Object.fromEntries((normalTarget + supervisionTarget)Entry[1].map(x => [x.date, x.value]));
         const cells = dates.map(x => {
           const v = m[x];
           if (v == null || v === '') return '<td>—</td>';
           const num = Number(v);
           return '<td>' + (Number.isFinite(num) ? coloredPercent(num) : esc(v)) + '</td>';
         }).join('');
-        rowsHtml.push('<tr class="total-target-row"><td><b>إجمالي التارجت اليومي</b></td>' + cells + '<td>—</td><td>—</td><td>' + coloredPercent(overallPercent) + '</td></tr>');
+        rowsHtml.push('<tr class="total-target-row"><td><b> اليومي</b></td>' + cells + '<td>—</td><td>—</td><td>' + coloredPercent(overallPercent) + '</td></tr>');
       }
 
       if (rowsHtml.length) {

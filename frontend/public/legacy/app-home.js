@@ -120,7 +120,7 @@ function fmtPercent(v) {
 }
 function achievementPercent(summary) {
   const achievement = Number(summary?.total_achievement);
-  const target = Number(summary?.total_target); // Master!AO — إجمالي التارجت
+  const target = Number(summary?.total_target); // Master!AO — 
   return Number.isFinite(achievement) && Number.isFinite(target) && target > 0 ? achievement / target : null;
 }
 function percentClass(value) {
@@ -541,7 +541,7 @@ async function loadSelfView(dashData) {
     });
     const totalAchievementPercent = Number.isFinite(Number(s.percentage)) ? Number(s.percentage) : null;
 
-    // إجمالي التارجت في KPIs = التارجت العادي + تارجت الإشراف.
+    //  في KPIs = التارجت العادي + تارجت الإشراف.
     const supervisorMonthlyTargetTotal = Object.values(data.supervisorTargets || {})
       .flatMap(rows => rows || [])
       .reduce((sum, r) => {
@@ -580,7 +580,7 @@ async function loadSelfView(dashData) {
       const monthlyTargetPercent = Number.isFinite(Number(s.percentage)) ? Number(s.percentage) : null;
       const hasMonthlyTargetPercent = Number.isFinite(monthlyTargetPercent);
       const rawKpis = [
-        { label: 'إجمالي التارجت', raw: hasCombinedMonthlyTarget ? combinedMonthlyTarget : null, display: hasCombinedMonthlyTarget ? fmtAttendanceNumber(combinedMonthlyTarget) : '—', cls: 'blue', icon: 'target' },
+        { label: '', raw: hasCombinedMonthlyTarget ? combinedMonthlyTarget : null, display: hasCombinedMonthlyTarget ? fmtAttendanceNumber(combinedMonthlyTarget) : '—', cls: 'blue', icon: 'target' },
         { label: 'نسبة التارجت الشهري', raw: hasMonthlyTargetPercent ? monthlyTargetPercent : null, display: hasMonthlyTargetPercent ? fmtPercent(monthlyTargetPercent) : '—', cls: 'blue', icon: 'rate' },
         { label: 'أيام الحضور', raw: presentDays, display: fmtAttendanceNumber(presentDays), cls: 'teal', icon: 'present' },
         { label: 'أيام الغياب', raw: absenceDays, display: absenceDays, cls: 'amber', icon: 'absent' },
@@ -627,7 +627,7 @@ async function loadSelfView(dashData) {
 
     function renderShiftDetail(profile, showShiftHeading) {
       const allStageEntries = Object.entries(profile.stages || {});
-      const totalTargetEntry = allStageEntries.find(([name]) => String(name).trim().toUpperCase() === 'TOTAL TARGET %');
+      const (normalTarget + supervisionTarget)Entry = allStageEntries.find(([name]) => String(name).trim().toUpperCase() === 'TOTAL TARGET %');
       const stageEntries = allStageEntries.filter(([name, rows]) => {
         if (String(name).trim().toUpperCase() === 'TOTAL TARGET %') return false;
          // A secondary snapshot is the employee's proof of attendance in a
@@ -639,11 +639,11 @@ async function loadSelfView(dashData) {
 
       const dateSet = new Set();
       stageEntries.forEach(([, rows]) => rows.forEach(r => dateSet.add(r.date)));
-      if (totalTargetEntry) totalTargetEntry[1].forEach(r => dateSet.add(r.date));
+      if ((normalTarget + supervisionTarget)Entry) (normalTarget + supervisionTarget)Entry[1].forEach(r => dateSet.add(r.date));
       const dates = [...dateSet].sort();
        const head = '<th>المرحلة</th>' + dates.map(d => `<th><span class="detail-date-head"><span class="detail-day">${detailWeekday(d)}</span><strong class="detail-date">${escapeHtml(d.slice(8) + '/' + d.slice(5, 7))}</strong></span></th>`).join('') + '<th>الإجمالي</th><th>التارجت الشهري</th><th>نسبة الإنجاز</th><th>النسبة الإجمالية</th>';
 
-      if (!stageEntries.length && !totalTargetEntry) {
+      if (!stageEntries.length && !(normalTarget + supervisionTarget)Entry) {
         return `${showShiftHeading ? `<div class="shift-detail-heading"><span>تفاصيل Shift ${escapeHtml(profile.shift)}</span></div>` : ''}<div class="table-wrap"><table><thead><tr>${head}</tr></thead><tbody><tr><td colspan="${dates.length + 4}"><div class="empty-state">لا توجد بيانات مطابقة.</div></td></tr></tbody></table></div>`;
       }
 
@@ -680,8 +680,8 @@ async function loadSelfView(dashData) {
       });
       const overallStagePercent = hasAnyStagePercent ? overallPercentSum : null;
 
-      if (totalTargetEntry) {
-        const rows = totalTargetEntry[1] || [];
+      if ((normalTarget + supervisionTarget)Entry) {
+        const rows = (normalTarget + supervisionTarget)Entry[1] || [];
         const byDate = Object.fromEntries(rows.map(r => [r.date, r.value]));
         const cells = dates.map(d => {
           const v = byDate[d];
@@ -689,13 +689,13 @@ async function loadSelfView(dashData) {
           const n = Number(v);
            return Number.isFinite(n) ? `<td class="cell-present total-target-cell">${coloredPercent(n)}</td>` : `<td class="cell-present total-target-cell">${escapeHtml(v)}</td>`;
         }).join('');
-         // إجمالي التارجت هنا = مجموع تارجت كل المراحل الحقيقي (grandTarget)،
+         //  هنا = مجموع تارجت كل المراحل الحقيقي (grandTarget)،
          // مش summary.total_target الخام المستورد من صف واحد بس في الشيت
          // (ده اللي كان بيطلع رقم غريب زي 30000 مش له علاقة بمجموع المراحل).
          const grandTargetCell = hasGrandTarget ? fmtAttendanceNumber(grandTarget) : '—';
          const grandAchievementCell = hasGrandAchievement ? fmtAttendanceNumber(grandAchievement) : '—';
          const percentCellForTotalRow = overallStagePercent == null ? '<td>—</td>' : `<td>${coloredPercent(overallStagePercent)}</td>`;
-        stageRows.push(`<tr class="total-target-master-row"><td><b>إجمالي التارجت اليومي</b></td>${cells}<td><b>${grandAchievementCell}</b></td><td><b>${grandTargetCell}</b></td>${percentCellForTotalRow}</tr>`);
+        stageRows.push(`<tr class="total-target-master-row"><td><b> اليومي</b></td>${cells}<td><b>${grandAchievementCell}</b></td><td><b>${grandTargetCell}</b></td>${percentCellForTotalRow}</tr>`);
       }
 
       // بادج "النسبة الإجمالية" الأزرق جنب الجدول، بنفس شكل صفحة الأدمن.
@@ -731,7 +731,7 @@ async function loadSelfView(dashData) {
          };
        });
      });
-     // إجمالي التارجت والإنجاز الحقيقيين = مجموع كل المراحل (غير الحضور)،
+     //  والإنجاز الحقيقيين = مجموع كل المراحل (غير الحضور)،
      // مش summary.total_target/total_achievement الخام المستوردة من صف واحد
      // بس في الشيت (كانت بتطلع رقم غريب زي 30000 مش له علاقة بمجموع المراحل).
      const exportGrandAchievement = exportRows.filter(r => !r.isAttendance && r.total != null).reduce((sum, r) => sum + r.total, 0);
@@ -778,7 +778,7 @@ async function loadSelfView(dashData) {
          ['الفترة', `${fmtDate(current.from)} → ${fmtDate(current.to)}`],
          ['النسبة الإجمالية', fmtPercent(current.grandPercent)],
          ['إجمالي الإنجاز', current.grandAchievement ?? ''],
-         ['إجمالي التارجت', current.grandTarget ?? ''],
+         ['', current.grandTarget ?? ''],
          [],
          head,
          ...rows,
