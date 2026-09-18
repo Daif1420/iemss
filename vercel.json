@@ -19,6 +19,10 @@
     { "source": "/admin-manual-entry.html", "destination": "/index.html" },
     { "source": "/reports.html", "destination": "/index.html" },
     { "source": "/audit-logs.html", "destination": "/index.html" },
-    { "source": "/themes.html", "destination": "/index.html" }
+    { "source": "/themes.html", "destination": "/index.html" },
+    { "source": "/employees-current.html", "destination": "/index.html" },
+    { "source": "/employees-left.html", "destination": "/index.html" },
+    { "source": "/employees-new.html", "destination": "/index.html" },
+    { "source": "/employee.html", "destination": "/index.html" }
   ]
 }

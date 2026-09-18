@@ -296,11 +296,20 @@ function renderKpis(overview) {
     ['إجمالي المغادرين', Number(o.leftEmployees || 0), 'left-kpi', 'leave', 'left'],
     ['إجمالي الجدد', Number(o.newEmployees || 0), 'new-kpi', 'new', 'new']
   ];
-  $('kpi-grid').innerHTML = cards.map(([label, val, cls, icon, group], i) => {
+  const grid = $('kpi-grid');
+  // This grid is shared with the 5 attendance-summary cards rendered by the
+  // attendance section further down this file (see kpis()). The two sections
+  // load their data independently and finish in whatever order the network
+  // returns, so overwriting the whole grid here used to wipe out the
+  // attendance cards whenever this admin overview resolved last — leaving
+  // only 7 of the 12 KPIs visible. Only touch the cards this function owns.
+  grid.querySelectorAll('[data-kpi-scope="admin"]').forEach(el => el.remove());
+  const html = cards.map(([label, val, cls, icon, group], i) => {
     const h = kpiCard(label, val, cls, icon, KPI_TREND_SHAPES[i % KPI_TREND_SHAPES.length]);
-    return `<div class="kpi-link-wrap" data-kpi-group="${group}" role="link" tabindex="0">${h}</div>`;
+    return `<div class="kpi-link-wrap" data-kpi-scope="admin" data-kpi-group="${group}" role="link" tabindex="0">${h}</div>`;
   }).join('');
-  $('kpi-grid').querySelectorAll('[data-kpi-group]').forEach(c => {
+  grid.insertAdjacentHTML('afterbegin', html);
+  grid.querySelectorAll('[data-kpi-scope="admin"][data-kpi-group]').forEach(c => {
     const go = () => {
       const g = c.dataset.kpiGroup;
       if (g === 'new') return location.href = '/employees-new.html';
@@ -850,12 +859,17 @@ function kpis(t){
   // the desktop layout break into inconsistent rows.
   const target=$('kpi-grid');
   if(!target)return;
+  // Own only the attendance-scoped cards: remove the previous set before
+  // appending so re-running this on every filter/refresh replaces them
+  // instead of piling up duplicates, and so the admin overview cards
+  // rendered by renderKpis() (above in this file) are never touched.
+  target.querySelectorAll('[data-kpi-scope="attendance"]').forEach(el=>el.remove());
   const cards=rows.map((x,i)=>{
     const [label,val,cls,icon]=x;
     const value=typeof val==='string'?val:num(val);
-    return shared.kpiCard(label,value,cls,icon,shared.KPI_TREND_SHAPES[i % shared.KPI_TREND_SHAPES.length]);
+    const h=shared.kpiCard(label,value,cls,icon,shared.KPI_TREND_SHAPES[i % shared.KPI_TREND_SHAPES.length]);
+    return `<div class="kpi-link-wrap" data-kpi-scope="attendance">${h}</div>`;
   }).join('');
-  const wrappers=[...target.querySelectorAll('.kpi-link-wrap')];
   target.insertAdjacentHTML('beforeend',cards);
   const attendance=$('attendance-kpis');
   if(attendance) attendance.innerHTML='';

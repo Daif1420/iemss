@@ -15,6 +15,10 @@ const SPA_ROUTES = [
   '/reports.html',
   '/audit-logs.html',
   '/themes.html',
+  '/employees-current.html',
+  '/employees-left.html',
+  '/employees-new.html',
+  '/employee.html',
 ]
 
 function legacyHtmlRoutes() {
