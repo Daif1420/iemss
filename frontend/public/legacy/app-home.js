@@ -561,16 +561,28 @@ async function loadSelfView(dashData) {
     const selectedFrom = $('f-from')?.value || '';
     const selectedTo = $('f-to')?.value || '';
     const inSelectedPeriod = date => (!selectedFrom || date >= selectedFrom) && (!selectedTo || date <= selectedTo);
+    // stageTargets from the API is the per-stage monthly target pulled from
+    // Master!AO for each stage (see employee_stage_targets on the backend).
+    // Keep it alongside each stage's own snapshot target so every stage's
+    // percentage below is computed against ITS OWN target, never the
+    // employee's single overall total_target (that mismatch produced
+    // percentages in the thousands).
+    const globalStageTargets = data.stageTargets || {};
     const normalizedProfiles = shiftProfiles.map(p => {
       const stageMap = {};
+      const stageTargetMap = {};
       (p.stages || []).forEach(st => {
         if (!st || !st.role) return;
          if (selectedStage !== '__ALL__' && selectedStage && st.role !== selectedStage) return;
          stageMap[st.role] = Object.entries(st.daily || {})
            .filter(([date]) => inSelectedPeriod(date))
            .map(([date, value]) => ({ date, value }));
+         const ownTarget = Number(st.monthlyTarget);
+         stageTargetMap[st.role] = Number.isFinite(ownTarget) && ownTarget > 0
+           ? ownTarget
+           : Number(globalStageTargets[st.role]) || null;
       });
-      return { shift: p.shift || 'Other', stages: stageMap, summary: p.summary || {}, employee: p.employee || {} };
+      return { shift: p.shift || 'Other', stages: stageMap, stageTargets: stageTargetMap, summary: p.summary || {}, employee: p.employee || {} };
     });
 
     function renderShiftDetail(profile, showShiftHeading) {
@@ -608,8 +620,12 @@ async function loadSelfView(dashData) {
           return `<td class="cell-present">${escapeHtml(v)}</td>`;
         }).join('');
          const isAttendance = String(stageName).trim() === 'الحضور';
-         const stagePercent = !isAttendance && hasNum && Number.isFinite(totalTarget) && totalTarget > 0 ? fmtPercent(sum / totalTarget) : '—';
-         const percentCell = `<td>${stagePercent === '—' ? '—' : coloredPercent(sum / totalTarget)}</td>`;
+         // Each stage has its own monthly target (Master!AO for that stage's
+         // row), not the employee's single overall total_target — use it here.
+         const stageTarget = Number(profile.stageTargets?.[stageName]);
+         const hasStageTarget = Number.isFinite(stageTarget) && stageTarget > 0;
+         const stagePercent = !isAttendance && hasNum && hasStageTarget ? fmtPercent(sum / stageTarget) : '—';
+         const percentCell = `<td>${stagePercent === '—' ? '—' : coloredPercent(sum / stageTarget)}</td>`;
          return `<tr><td><b>${escapeHtml(stageName)}</b></td>${cells}<td>${hasNum ? fmtAttendanceNumber(sum) : '—'}</td>${percentCell}</tr>`;
       });
 
@@ -630,21 +646,24 @@ async function loadSelfView(dashData) {
       return `${showShiftHeading ? `<div class="shift-detail-heading"><span>تفاصيل Shift ${escapeHtml(profile.shift)}</span></div>` : ''}<div class="table-wrap shift-detail-table"><table><thead><tr>${head}</tr></thead><tbody>${stageRows.join('')}</tbody></table></div>`;
     }
 
-    const profilesToShow = normalizedProfiles.length > 1 ? normalizedProfiles : [{ shift: emp.shift || 'Other', stages: data.stages || {}, summary: s, employee: emp }];
+    const profilesToShow = normalizedProfiles.length > 1 ? normalizedProfiles : [{ shift: emp.shift || 'Other', stages: data.stages || {}, stageTargets: globalStageTargets, summary: s, employee: emp }];
     const duplicateShifts = normalizedProfiles.length > 1;
      const exportDates = [...new Set(profilesToShow.flatMap(p => Object.values(p.stages || {}).flatMap(rows => (rows || []).map(r => r.date))))].sort();
      const exportRows = profilesToShow.flatMap(profile => {
-       const target = Number(profile.summary?.total_target);
        return Object.entries(profile.stages || {}).map(([stage, rows]) => {
          const numericValues = (rows || []).map(r => Number(r.value)).filter(Number.isFinite);
          const total = numericValues.reduce((sum, value) => sum + value, 0);
          const isAttendance = String(stage).trim() === 'الحضور';
+         // Same fix as the on-screen table: each stage's own target, not the
+         // employee's single overall total_target.
+         const stageTarget = Number(profile.stageTargets?.[stage]);
+         const hasStageTarget = Number.isFinite(stageTarget) && stageTarget > 0;
          return {
            shift: profile.shift,
            stage,
            values: Object.fromEntries((rows || []).map(r => [r.date, r.value])),
            total: numericValues.length ? total : null,
-           percentage: !isAttendance && numericValues.length && Number.isFinite(target) && target > 0 ? total / target : null,
+           percentage: !isAttendance && numericValues.length && hasStageTarget ? total / stageTarget : null,
          };
        });
      });
