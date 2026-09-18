@@ -627,7 +627,7 @@ async function loadSelfView(dashData) {
 
     function renderShiftDetail(profile, showShiftHeading) {
       const allStageEntries = Object.entries(profile.stages || {});
-      const (normalTarget + supervisionTarget)Entry = allStageEntries.find(([name]) => String(name).trim().toUpperCase() === 'TOTAL TARGET %');
+      const totalTargetEntry = allStageEntries.find(([name]) => String(name).trim().toUpperCase() === 'TOTAL TARGET %');
       const stageEntries = allStageEntries.filter(([name, rows]) => {
         if (String(name).trim().toUpperCase() === 'TOTAL TARGET %') return false;
          // A secondary snapshot is the employee's proof of attendance in a
@@ -639,11 +639,11 @@ async function loadSelfView(dashData) {
 
       const dateSet = new Set();
       stageEntries.forEach(([, rows]) => rows.forEach(r => dateSet.add(r.date)));
-      if ((normalTarget + supervisionTarget)Entry) (normalTarget + supervisionTarget)Entry[1].forEach(r => dateSet.add(r.date));
+      if (totalTargetEntry) totalTargetEntry[1].forEach(r => dateSet.add(r.date));
       const dates = [...dateSet].sort();
        const head = '<th>المرحلة</th>' + dates.map(d => `<th><span class="detail-date-head"><span class="detail-day">${detailWeekday(d)}</span><strong class="detail-date">${escapeHtml(d.slice(8) + '/' + d.slice(5, 7))}</strong></span></th>`).join('') + '<th>الإجمالي</th><th>التارجت الشهري</th><th>نسبة الإنجاز</th><th>النسبة الإجمالية</th>';
 
-      if (!stageEntries.length && !(normalTarget + supervisionTarget)Entry) {
+      if (!stageEntries.length && !totalTargetEntry) {
         return `${showShiftHeading ? `<div class="shift-detail-heading"><span>تفاصيل Shift ${escapeHtml(profile.shift)}</span></div>` : ''}<div class="table-wrap"><table><thead><tr>${head}</tr></thead><tbody><tr><td colspan="${dates.length + 4}"><div class="empty-state">لا توجد بيانات مطابقة.</div></td></tr></tbody></table></div>`;
       }
 
@@ -680,8 +680,8 @@ async function loadSelfView(dashData) {
       });
       const overallStagePercent = hasAnyStagePercent ? overallPercentSum : null;
 
-      if ((normalTarget + supervisionTarget)Entry) {
-        const rows = (normalTarget + supervisionTarget)Entry[1] || [];
+      if (totalTargetEntry) {
+        const rows = totalTargetEntry[1] || [];
         const byDate = Object.fromEntries(rows.map(r => [r.date, r.value]));
         const cells = dates.map(d => {
           const v = byDate[d];
