@@ -576,7 +576,7 @@ async function loadSelfView(dashData) {
       const bonusTier = s.bonus_tier;
       const bonusTierNum = Number(bonusTier);
       const bonusTierDisplay = (bonusTier !== null && bonusTier !== undefined && bonusTier !== '' && Number.isFinite(bonusTierNum)) ? Math.round(bonusTierNum) : bonusTier;
-      const monthlyTargetPercent = totalAchievementPercent;
+      const monthlyTargetPercent = Number.isFinite(Number(s.percentage)) ? Number(s.percentage) : null;
       const hasMonthlyTargetPercent = Number.isFinite(monthlyTargetPercent);
       const rawKpis = [
         { label: 'نسبة التارجت الشهري', raw: hasMonthlyTargetPercent ? monthlyTargetPercent : null, display: hasMonthlyTargetPercent ? fmtPercent(monthlyTargetPercent) : '—', cls: 'blue', icon: 'rate' },
