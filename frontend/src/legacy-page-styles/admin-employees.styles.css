@@ -36,3 +36,8 @@
 .attendance-page-shell > main.container .legal{
   margin-top:18px;
 }
+
+/* Employee management spacing — restore the original container rhythm. */
+.attendance-page-shell > main.container{padding-top:28px !important;}
+@media(max-width:900px){.attendance-page-shell > main.container{padding-top:28px !important;}}
+@media(max-width:680px){.attendance-page-shell > main.container{padding-top:22px !important;}}
