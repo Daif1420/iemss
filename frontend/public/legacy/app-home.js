@@ -518,13 +518,34 @@ async function loadSelfView(dashData) {
         <div class="info-item"><span>الفئة</span><b>${escapeHtml(emp.education || '—')}</b></div>`;
     }
 
-    // AP is kept as an imported reference, but the displayed achievement
-    // percentage is calculated from AN / AO so AO remains the denominator.
-    const totalAchievementPercent = achievementPercent(s);
+    // النسبة والإجمالي هنا = مجموع كل مرحلة على حدة (إنجازها ÷ تارجتها)،
+    // ومجموع تارجت/إنجاز كل المراحل الحقيقي — مش قسمة s.total_achievement
+    // على s.total_target الخام (رقم واحد مستورد من صف واحد بالشيت ومش
+    // مرتبط بمجموع المراحل الفعلي، وده اللي كان بيظهر كرقم غريب زي 30000).
+    const canonicalStageTargets = data.stageTargets || {};
+    let canonicalAchievement = 0, canonicalTarget = 0, canonicalPercentSum = 0, canonicalHasPercent = false;
+    Object.entries(data.stages || {}).forEach(([stageName, rows]) => {
+      const isAttendance = String(stageName).trim() === 'الحضور';
+      const isTotalRow = String(stageName).trim().toUpperCase() === 'TOTAL TARGET %';
+      if (isAttendance || isTotalRow) return;
+      const numericValues = (rows || []).map(r => Number(r.value)).filter(Number.isFinite);
+      if (!numericValues.length) return;
+      const sum = numericValues.reduce((a, b) => a + b, 0);
+      const target = Number(canonicalStageTargets[stageName]);
+      canonicalAchievement += sum;
+      if (Number.isFinite(target) && target > 0) {
+        canonicalTarget += target;
+        canonicalPercentSum += sum / target;
+        canonicalHasPercent = true;
+      }
+    });
+    const totalAchievementPercent = canonicalHasPercent ? canonicalPercentSum : null;
 
     if ($('emp-perf-card')) {
       $('emp-perf-card').innerHTML = `
         <div class="info-item"><span>نسبة التارجت</span><b class="accent-value">${fmtPercent(totalAchievementPercent)}</b></div>
+        <div class="info-item"><span>إجمالي الإنجاز</span><b class="accent-value">${fmtNumber(canonicalAchievement)}</b></div>
+        <div class="info-item"><span>إجمالي التارجت</span><b>${fmtNumber(canonicalTarget)}</b></div>
         <div class="info-item"><span>أيام الحضور</span><b class="accent-value">${fmtAttendanceNumber(s.total_present_days ?? a.present_days)}</b></div>
         <div class="info-item"><span>رقم الشريحة</span><b>${escapeHtml(s.bonus_tier ?? '—')}</b></div>
         <div class="info-item"><span>إجمالي طبيعة العمل</span><b>${fmtNumber(s.work_nature_allowance)}</b></div>
@@ -608,16 +629,19 @@ async function loadSelfView(dashData) {
       stageEntries.forEach(([, rows]) => rows.forEach(r => dateSet.add(r.date)));
       if (totalTargetEntry) totalTargetEntry[1].forEach(r => dateSet.add(r.date));
       const dates = [...dateSet].sort();
-       const totalTarget = Number(profile.summary?.total_target); // Master!AO
-       const head = '<th>المرحلة</th>' + dates.map(d => `<th><span class="detail-date-head"><span class="detail-day">${detailWeekday(d)}</span><strong class="detail-date">${escapeHtml(d.slice(8) + '/' + d.slice(5, 7))}</strong></span></th>`).join('') + '<th>الإجمالي</th><th>نسبة الإنجاز</th>';
+       const head = '<th>المرحلة</th>' + dates.map(d => `<th><span class="detail-date-head"><span class="detail-day">${detailWeekday(d)}</span><strong class="detail-date">${escapeHtml(d.slice(8) + '/' + d.slice(5, 7))}</strong></span></th>`).join('') + '<th>الإجمالي</th><th>التارجت الشهري</th><th>نسبة الإنجاز</th>';
 
       if (!stageEntries.length && !totalTargetEntry) {
-        return `${showShiftHeading ? `<div class="shift-detail-heading"><span>تفاصيل Shift ${escapeHtml(profile.shift)}</span></div>` : ''}<div class="table-wrap"><table><thead><tr>${head}</tr></thead><tbody><tr><td colspan="${dates.length + 3}"><div class="empty-state">لا توجد بيانات مطابقة.</div></td></tr></tbody></table></div>`;
+        return `${showShiftHeading ? `<div class="shift-detail-heading"><span>تفاصيل Shift ${escapeHtml(profile.shift)}</span></div>` : ''}<div class="table-wrap"><table><thead><tr>${head}</tr></thead><tbody><tr><td colspan="${dates.length + 4}"><div class="empty-state">لا توجد بيانات مطابقة.</div></td></tr></tbody></table></div>`;
       }
 
       // النسبة الإجمالية = مجموع نسبة كل مرحلة (إنجازها ÷ تارجتها)، مش قسمة
       // إجمالي الإنجاز على إجمالي التارجت. نفس حساب صفحة الأدمن بالظبط.
+      // وبنجمع كمان إجمالي الإنجاز الحقيقي وإجمالي التارجت الحقيقي (مجموع
+      // تارجت كل مرحلة) عشان يظهروا كأرقام خام جنب بادج النسبة.
       let overallPercentSum = 0, hasAnyStagePercent = false;
+      let grandAchievement = 0, hasGrandAchievement = false;
+      let grandTarget = 0, hasGrandTarget = false;
 
       const stageRows = stageEntries.map(([stageName, rows], idx) => {
         const byDate = Object.fromEntries(rows.map(r => [r.date, r.value]));
@@ -636,9 +660,12 @@ async function loadSelfView(dashData) {
          const hasStageTarget = Number.isFinite(stageTarget) && stageTarget > 0;
          const stageRatio = !isAttendance && hasNum && hasStageTarget ? sum / stageTarget : null;
          if (stageRatio != null) { overallPercentSum += stageRatio; hasAnyStagePercent = true; }
+         if (!isAttendance && hasNum) { grandAchievement += sum; hasGrandAchievement = true; }
+         if (!isAttendance && hasStageTarget) { grandTarget += stageTarget; hasGrandTarget = true; }
          const stagePercent = stageRatio != null ? fmtPercent(stageRatio) : '—';
          const percentCell = `<td>${stagePercent === '—' ? '—' : coloredPercent(stageRatio)}</td>`;
-         return `<tr><td><b>${escapeHtml(stageName)}</b></td>${cells}<td>${hasNum ? fmtAttendanceNumber(sum) : '—'}</td>${percentCell}</tr>`;
+         const targetCell = `<td>${hasStageTarget ? fmtAttendanceNumber(stageTarget) : '—'}</td>`;
+         return `<tr><td><b>${escapeHtml(stageName)}</b></td>${cells}<td>${hasNum ? fmtAttendanceNumber(sum) : '—'}</td>${targetCell}${percentCell}</tr>`;
       });
       const overallStagePercent = hasAnyStagePercent ? overallPercentSum : null;
 
@@ -651,9 +678,13 @@ async function loadSelfView(dashData) {
           const n = Number(v);
            return Number.isFinite(n) ? `<td class="cell-present total-target-cell">${coloredPercent(n)}</td>` : `<td class="cell-present total-target-cell">${escapeHtml(v)}</td>`;
         }).join('');
-         const totalTargetCell = Number.isFinite(totalTarget) ? fmtNumber(totalTarget) : '—';
+         // إجمالي التارجت هنا = مجموع تارجت كل المراحل الحقيقي (grandTarget)،
+         // مش summary.total_target الخام المستورد من صف واحد بس في الشيت
+         // (ده اللي كان بيطلع رقم غريب زي 30000 مش له علاقة بمجموع المراحل).
+         const grandTargetCell = hasGrandTarget ? fmtAttendanceNumber(grandTarget) : '—';
+         const grandAchievementCell = hasGrandAchievement ? fmtAttendanceNumber(grandAchievement) : '—';
          const percentCellForTotalRow = overallStagePercent == null ? '<td>—</td>' : `<td>${coloredPercent(overallStagePercent)}</td>`;
-        stageRows.push(`<tr class="total-target-master-row"><td><b>إجمالي التارجت اليومي</b></td>${cells}<td><b>${totalTargetCell}</b></td>${percentCellForTotalRow}</tr>`);
+        stageRows.push(`<tr class="total-target-master-row"><td><b>إجمالي التارجت اليومي</b></td>${cells}<td><b>${grandAchievementCell}</b></td><td><b>${grandTargetCell}</b></td>${percentCellForTotalRow}</tr>`);
       }
 
       // بادج "النسبة الإجمالية" الأزرق جنب الجدول، بنفس شكل صفحة الأدمن.
@@ -678,15 +709,27 @@ async function loadSelfView(dashData) {
          return {
            shift: profile.shift,
            stage,
+           isAttendance,
            values: Object.fromEntries((rows || []).map(r => [r.date, r.value])),
            total: numericValues.length ? total : null,
+           target: hasStageTarget ? stageTarget : null,
            percentage: !isAttendance && numericValues.length && hasStageTarget ? total / stageTarget : null,
          };
        });
      });
+     // إجمالي التارجت والإنجاز الحقيقيين = مجموع كل المراحل (غير الحضور)،
+     // مش summary.total_target/total_achievement الخام المستوردة من صف واحد
+     // بس في الشيت (كانت بتطلع رقم غريب زي 30000 مش له علاقة بمجموع المراحل).
+     const exportGrandAchievement = exportRows.filter(r => !r.isAttendance && r.total != null).reduce((sum, r) => sum + r.total, 0);
+     const exportGrandTarget = exportRows.filter(r => !r.isAttendance && r.target != null).reduce((sum, r) => sum + r.target, 0);
+     const exportGrandPercent = exportRows.filter(r => r.percentage != null).reduce((sum, r) => sum + r.percentage, 0);
+     const exportHasPercent = exportRows.some(r => r.percentage != null);
      window.__iemsEmployeeDetailExport = {
        employee: emp,
        summary: s,
+       grandAchievement: exportGrandAchievement,
+       grandTarget: exportGrandTarget,
+       grandPercent: exportHasPercent ? exportGrandPercent : null,
        from: $('f-from')?.value || '',
        to: $('f-to')?.value || '',
        dates: exportDates,
@@ -702,12 +745,13 @@ async function loadSelfView(dashData) {
      };
      const employeeExportTable = () => {
        const current = window.__iemsEmployeeDetailExport;
-       const head = ['الشيفت', 'المرحلة', ...current.dates.map(fmtDate), 'الإجمالي', 'نسبة الإنجاز'];
+       const head = ['الشيفت', 'المرحلة', ...current.dates.map(fmtDate), 'الإجمالي', 'التارجت الشهري', 'نسبة الإنجاز'];
        const rows = current.rows.map(row => [
          row.shift,
          row.stage,
          ...current.dates.map(date => row.values[date] ?? ''),
          row.total ?? '',
+         row.target ?? '',
          row.percentage === null ? '' : fmtPercent(row.percentage),
        ]);
        return { current, head, rows };
@@ -718,9 +762,9 @@ async function loadSelfView(dashData) {
          ['الموظف', current.employee.name],
          ['ID', current.employee.id],
          ['الفترة', `${fmtDate(current.from)} → ${fmtDate(current.to)}`],
-         ['نسبة التارجت الإجمالية', fmtPercent(achievementPercent(current.summary))],
-         ['إجمالي الإنجاز', current.summary?.total_achievement ?? ''],
-         ['إجمالي التارجت', current.summary?.total_target ?? ''],
+         ['النسبة الإجمالية', fmtPercent(current.grandPercent)],
+         ['إجمالي الإنجاز', current.grandAchievement ?? ''],
+         ['إجمالي التارجت', current.grandTarget ?? ''],
          [],
          head,
          ...rows,
@@ -743,7 +787,7 @@ async function loadSelfView(dashData) {
        const root = document.createElement('div');
        root.id = 'employee-detail-pdf-root';
        root.dir = 'rtl';
-       root.innerHTML = `<div class="employee-pdf-sheet"><h1>تفاصيل أداء الموظف</h1><p><b>${escapeHtml(current.employee.name)}</b> · ID ${escapeHtml(current.employee.id)} · ${fmtDate(current.from)} → ${fmtDate(current.to)}</p><div class="employee-pdf-summary"><span>نسبة التارجت: <b>${fmtPercent(achievementPercent(current.summary))}</b></span><span>الإنجاز: <b>${fmtNumber(current.summary?.total_achievement)}</b></span><span>التارجت: <b>${fmtNumber(current.summary?.total_target)}</b></span></div><table><thead><tr>${head.map(cell => `<th>${escapeHtml(cell)}</th>`).join('')}</tr></thead><tbody>${rows.map(row => `<tr>${row.map(cell => `<td>${escapeHtml(cell)}</td>`).join('')}</tr>`).join('')}</tbody></table></div>`;
+       root.innerHTML = `<div class="employee-pdf-sheet"><h1>تفاصيل أداء الموظف</h1><p><b>${escapeHtml(current.employee.name)}</b> · ID ${escapeHtml(current.employee.id)} · ${fmtDate(current.from)} → ${fmtDate(current.to)}</p><div class="employee-pdf-summary"><span>نسبة التارجت: <b>${fmtPercent(current.grandPercent)}</b></span><span>الإنجاز: <b>${fmtNumber(current.grandAchievement)}</b></span><span>التارجت: <b>${fmtNumber(current.grandTarget)}</b></span></div><table><thead><tr>${head.map(cell => `<th>${escapeHtml(cell)}</th>`).join('')}</tr></thead><tbody>${rows.map(row => `<tr>${row.map(cell => `<td>${escapeHtml(cell)}</td>`).join('')}</tr>`).join('')}</tbody></table></div>`;
        document.body.appendChild(root);
        return root;
      };

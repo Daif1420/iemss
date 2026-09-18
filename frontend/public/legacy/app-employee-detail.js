@@ -51,7 +51,10 @@
       // النسبة الإجمالية = مجموع نسبة كل مرحلة على حدة (إنجازها ÷ تارجتها)،
       // مش قسمة إجمالي الإنجاز على إجمالي التارجت. كل مرحلة بتحسب مرة واحدة
       // هنا وبتتجمع مع بعضها عشان بادج "النسبة الإجمالية" يبقى نفس الرقم.
+      // وبنجمع كمان إجمالي الإنجاز/التارجت الحقيقيين (مجموع كل المراحل)
+      // بدل summary.total_target الخام اللي مش مرتبط بمجموع المراحل الفعلي.
       let overallPercentSum = 0, hasAnyStagePercent = false;
+      let grandAchievement = 0, grandTarget = 0;
 
       const rowsHtml = stageEntries.map(([st, rs]) => {
         const m = Object.fromEntries(rs.map(x => [x.date, x.value]));
@@ -67,6 +70,8 @@
         const hasTarget = Number.isFinite(target) && target > 0;
         const stageRatio = hasNum && hasTarget ? sum / target : null;
         if (stageRatio != null) { overallPercentSum += stageRatio; hasAnyStagePercent = true; }
+        if (!isAttendance && hasNum) grandAchievement += sum;
+        if (hasTarget) grandTarget += target;
         const stagePercent = stageRatio != null ? coloredPercent(stageRatio) : '—';
         return '<tr><td>' + esc(st) + '</td>' + cells + '<td>' + (hasNum ? n(sum) : '—') + '</td><td>' + (target ? n(target) : '—') + '</td><td>' + stagePercent + '</td></tr>';
       });
@@ -75,9 +80,10 @@
       $('detail-overall').innerHTML = `<span class="overall-percent ${percentClass(overallPercent)}">${p(overallPercent)}</span><span class="overall-percent-label">النسبة الإجمالية</span>`;
 
       // نسبة التارجت هنا فوق = نفس مجموع نسب المراحل (زي بادج النسبة
-      // الإجمالية بالظبط)، مش Master!AP. "التارجت الشهري" اتشالت من هنا
-      // لأنها موجودة لكل مرحلة على حدة في عمود "التارجت" بالجدول تحت.
-      $('detail-perf').innerHTML = `<div class="info-item"><span>نسبة التارجت</span><b>${coloredPercent(overallPercent)}</b></div><div class="info-item"><span>أيام الحضور</span><b>${n(s.total_present_days ?? a.present_days)}</b></div><div class="info-item"><span>إجمالي الغياب</span><b>${n(s.total_absence)}</b></div><div class="info-item"><span>الإضافي</span><b>${hh(s.overtime_hours)}</b></div><div class="info-item"><span>التأخيرات</span><b>${hh(s.late_hours)}</b></div>`;
+      // الإجمالية بالظبط)، مش Master!AP. وإجمالي الإنجاز/التارجت هنا = مجموع
+      // كل المراحل الحقيقي، مش summary.total_target الخام (رقم واحد مستورد
+      // من صف واحد بالشيت زي 30000 مش له علاقة بمجموع المراحل الفعلي).
+      $('detail-perf').innerHTML = `<div class="info-item"><span>نسبة التارجت</span><b>${coloredPercent(overallPercent)}</b></div><div class="info-item"><span>إجمالي الإنجاز</span><b>${n(grandAchievement)}</b></div><div class="info-item"><span>إجمالي التارجت</span><b>${n(grandTarget)}</b></div><div class="info-item"><span>أيام الحضور</span><b>${n(s.total_present_days ?? a.present_days)}</b></div><div class="info-item"><span>إجمالي الغياب</span><b>${n(s.total_absence)}</b></div><div class="info-item"><span>الإضافي</span><b>${hh(s.overtime_hours)}</b></div><div class="info-item"><span>التأخيرات</span><b>${hh(s.late_hours)}</b></div>`;
 
       if (totalTargetEntry) {
         const m = Object.fromEntries(totalTargetEntry[1].map(x => [x.date, x.value]));
