@@ -148,21 +148,6 @@
     if (allowed !== undefined) el.style.display = allowed ? 'inline-flex' : 'none';
   });
 
-  // Language toggle (AR/EN) — shared across every inner page that loads this file.
-  const langToggle = document.getElementById('lang-toggle');
-  if (langToggle) {
-    const syncLangLabel = () => {
-      const lang = window.IEMS_I18N ? window.IEMS_I18N.currentLang() : 'ar';
-      langToggle.textContent = lang === 'ar' ? 'EN' : 'AR';
-    };
-    langToggle.addEventListener('click', () => {
-      if (window.IEMS_I18N) window.IEMS_I18N.toggle();
-      syncLangLabel();
-    });
-    // i18n.js applies on DOMContentLoaded; this script also runs after DOM
-    // is parsed, so IEMS_I18N is already defined here.
-    syncLangLabel();
-  }
 })();
 
 

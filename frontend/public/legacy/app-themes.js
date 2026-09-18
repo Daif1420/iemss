@@ -5,6 +5,10 @@ const token=sessionStorage.getItem('iems_token');const raw=sessionStorage.getIte
 // every legacy script in a function, so `return` here is valid and safe.
 if(!token||!user||user.role!=='system_creator'){location.href=token?'/home.html':'/index.html';return}
 const $=id=>document.getElementById(id);let pendingData=null;
+$('chip-name').textContent=user.name;
+$('chip-role').textContent=`ID: ${user.id} · منشئ النظام`;
+$('chip-avatar').textContent=(user.name||'?').trim()[0]||'?';
+$('logout-btn').onclick=()=>{sessionStorage.clear();location.href='/index.html'};
 const esc=v=>String(v??'').replace(/[&<>'"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;',"'":'&#39;','"':'&quot;'}[c]));
 async function api(path,opts={}){const r=await fetch(path,{...opts,headers:{Authorization:'Bearer '+token,'Content-Type':'application/json',...(opts.headers||{})}});if(r.status===401){sessionStorage.clear();location.href='/index.html';throw Error('انتهت الجلسة')}const d=await r.json();if(!r.ok)throw Error(d.error||'حدث خطأ');return d}
 function show(data){pendingData=null;if(data?.banner){$('banner-preview').src=data.banner;$('banner-preview').style.display='block';$('banner-empty').style.display='none'}else{$('banner-preview').style.display='none';$('banner-empty').style.display='block'}}
