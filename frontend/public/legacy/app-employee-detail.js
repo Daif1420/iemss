@@ -48,12 +48,11 @@
 
       $('detail-head').innerHTML = '<th>المرحلة</th>' + dates.map(x => '<th>' + esc(String(x).slice(5)) + '</th>').join('') + '<th>الإجمالي</th><th>التارجت الشهري</th><th>نسبة الإنجاز</th><th>النسبة الإجمالية</th>';
 
-      // النسبة الإجمالية = مجموع نسبة كل مرحلة على حدة (إنجازها ÷ تارجتها)،
-      // مش قسمة إجمالي الإنجاز على إجمالي التارجت. كل مرحلة بتحسب مرة واحدة
-      // هنا وبتتجمع مع بعضها عشان بادج "النسبة الإجمالية" يبقى نفس الرقم.
-      // وبنجمع كمان إجمالي الإنجاز/التارجت الحقيقيين (مجموع كل المراحل)
-      // بدل summary.total_target الخام اللي مش مرتبط بمجموع المراحل الفعلي.
-      let overallPercentSum = 0, hasAnyStagePercent = false;
+      // النسبة الإجمالية = النسبة الشهرية الأصلية المسجلة للموظف، بدون
+      // إعادة قسمتها أو جمع نسب المراحل. نسب المراحل الفردية فقط تُحسب
+      // مقابل تارجت كل مرحلة.
+      const overallPercentSum = Number.isFinite(Number(s.percentage)) ? Number(s.percentage) : null;
+      const hasAnyStagePercent = overallPercentSum != null;
       let grandAchievement = 0, grandTarget = 0;
 
       const rowsHtml = stageEntries.map(([st, rs]) => {
@@ -69,7 +68,7 @@
         const target = isAttendance ? null : Number(stageTargets[st]);
         const hasTarget = Number.isFinite(target) && target > 0;
         const stageRatio = hasNum && hasTarget ? sum / target : null;
-        if (stageRatio != null) { overallPercentSum += stageRatio; hasAnyStagePercent = true; }
+
         if (!isAttendance && hasNum) grandAchievement += sum;
         if (hasTarget) grandTarget += target;
         const stagePercent = stageRatio != null ? coloredPercent(stageRatio) : '—';

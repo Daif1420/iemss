@@ -539,10 +539,9 @@ async function loadSelfView(dashData) {
         canonicalHasPercent = true;
       }
     });
-    const totalAchievementPercent = canonicalTarget > 0 ? (canonicalAchievement / canonicalTarget) : null;
+    const totalAchievementPercent = Number.isFinite(Number(s.percentage)) ? Number(s.percentage) : null;
 
-    // نسبة التارجت الشهري في KPI الموظف = إجمالي الإنجاز ÷ إجمالي تارجت المراحل.
-    // تارجت الإشراف لا يدخل في نسبة الموظف العادية.
+    // إجمالي التارجت في KPIs = التارجت العادي + تارجت الإشراف.
     const supervisorMonthlyTargetTotal = Object.values(data.supervisorTargets || {})
       .flatMap(rows => rows || [])
       .reduce((sum, r) => {
@@ -550,6 +549,8 @@ async function loadSelfView(dashData) {
         return Number.isFinite(n) ? sum + n : sum;
       }, 0);
     const hasSupervisorMonthlyTarget = Number.isFinite(supervisorMonthlyTargetTotal) && supervisorMonthlyTargetTotal !== 0;
+    const combinedMonthlyTarget = canonicalTarget + (hasSupervisorMonthlyTarget ? supervisorMonthlyTargetTotal : 0);
+    const hasCombinedMonthlyTarget = Number.isFinite(combinedMonthlyTarget) && combinedMonthlyTarget > 0;
 
     if ($('emp-perf-card')) {
       $('emp-perf-card').innerHTML = `
@@ -579,6 +580,7 @@ async function loadSelfView(dashData) {
       const monthlyTargetPercent = Number.isFinite(Number(s.percentage)) ? Number(s.percentage) : null;
       const hasMonthlyTargetPercent = Number.isFinite(monthlyTargetPercent);
       const rawKpis = [
+        { label: 'إجمالي التارجت', raw: hasCombinedMonthlyTarget ? combinedMonthlyTarget : null, display: hasCombinedMonthlyTarget ? fmtAttendanceNumber(combinedMonthlyTarget) : '—', cls: 'blue', icon: 'target' },
         { label: 'نسبة التارجت الشهري', raw: hasMonthlyTargetPercent ? monthlyTargetPercent : null, display: hasMonthlyTargetPercent ? fmtPercent(monthlyTargetPercent) : '—', cls: 'blue', icon: 'rate' },
         { label: 'أيام الحضور', raw: presentDays, display: fmtAttendanceNumber(presentDays), cls: 'teal', icon: 'present' },
         { label: 'أيام الغياب', raw: absenceDays, display: absenceDays, cls: 'amber', icon: 'absent' },
@@ -645,11 +647,10 @@ async function loadSelfView(dashData) {
         return `${showShiftHeading ? `<div class="shift-detail-heading"><span>تفاصيل Shift ${escapeHtml(profile.shift)}</span></div>` : ''}<div class="table-wrap"><table><thead><tr>${head}</tr></thead><tbody><tr><td colspan="${dates.length + 4}"><div class="empty-state">لا توجد بيانات مطابقة.</div></td></tr></tbody></table></div>`;
       }
 
-      // النسبة الإجمالية = مجموع نسبة كل مرحلة (إنجازها ÷ تارجتها)، مش قسمة
-      // إجمالي الإنجاز على إجمالي التارجت. نفس حساب صفحة الأدمن بالظبط.
-      // وبنجمع كمان إجمالي الإنجاز الحقيقي وإجمالي التارجت الحقيقي (مجموع
-      // تارجت كل مرحلة) عشان يظهروا كأرقام خام جنب بادج النسبة.
-      let overallPercentSum = 0, hasAnyStagePercent = false;
+      // النسبة الإجمالية المعروضة للموظف = النسبة الشهرية الأصلية من Master/AP.
+      // نسب المراحل الفردية فقط هي التي تُحسب مقابل تارجت كل مرحلة.
+      const overallPercentSum = Number.isFinite(Number(s.percentage)) ? Number(s.percentage) : null;
+      const hasAnyStagePercent = overallPercentSum != null;
       let grandAchievement = 0, hasGrandAchievement = false;
       let grandTarget = 0, hasGrandTarget = false;
 
@@ -669,7 +670,7 @@ async function loadSelfView(dashData) {
          const stageTarget = Number(profile.stageTargets?.[stageName]);
          const hasStageTarget = Number.isFinite(stageTarget) && stageTarget > 0;
          const stageRatio = !isAttendance && hasNum && hasStageTarget ? sum / stageTarget : null;
-         if (stageRatio != null) { overallPercentSum += stageRatio; hasAnyStagePercent = true; }
+
          if (!isAttendance && hasNum) { grandAchievement += sum; hasGrandAchievement = true; }
          if (!isAttendance && hasStageTarget) { grandTarget += stageTarget; hasGrandTarget = true; }
          const stagePercent = stageRatio != null ? fmtPercent(stageRatio) : '—';
