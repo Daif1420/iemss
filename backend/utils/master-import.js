@@ -259,6 +259,7 @@ function parseSheet(xml, sharedStrings) {
     if (!rowNum) continue;
 
     const cells = {};
+    const formulas = {};
 
     const cellRegex =
       /<c\b([^>]*?)(?:>([\s\S]*?)<\/c>|\s*\/>)/g;
@@ -290,6 +291,13 @@ function parseSheet(xml, sharedStrings) {
 
       const body =
         cellMatch[2] || '';
+
+      const formulaMatch = body.match(
+        /<f\b[^>]*>([\s\S]*?)<\/f>/
+      );
+      if (formulaMatch) {
+        formulas[col] = xmlUnescape(formulaMatch[1]);
+      }
 
       let value = null;
 
@@ -356,6 +364,13 @@ function parseSheet(xml, sharedStrings) {
 
       cells[col] = value;
     }
+
+    // Keep formulas available to import-specific logic without changing the
+    // existing row shape consumed by the rest of the parser.
+    Object.defineProperty(cells, '__formulas', {
+      value: formulas,
+      enumerable: false,
+    });
 
     rows.set(
       rowNum,
@@ -459,6 +474,25 @@ function normalizeStage(value) {
   return text
     .replace(/\s+/g, ' ')
     .trim();
+}
+
+/**
+ * Master!AO contains each stage's percentage as a formula such as
+ * `AN311/6000`. The denominator is the monthly target for that stage.
+ *
+ * Only accept a plain numeric denominator at the end of the formula. This
+ * avoids accidentally treating unrelated formulas as targets and lets a
+ * future workbook use a different formula shape without importing a wrong
+ * number.
+ */
+function extractMonthlyTarget(formula) {
+  if (!formula) return null;
+  const match = String(formula).trim().match(
+    /\/\s*\$?([0-9]+(?:\.[0-9]+)?)\s*$/
+  );
+  if (!match) return null;
+  const target = Number(match[1]);
+  return Number.isFinite(target) && target > 0 ? target : null;
 }
 
 /**
@@ -1151,9 +1185,14 @@ function parseMasterWorkbook(buffer) {
         }
       }
 
+      const monthlyTargetFormula = stageName === 'الحضور'
+        ? null
+        : row.__formulas?.[41] || null;
       employee.stages.push({
         role: stageName,
-        daily
+        daily,
+        monthlyTarget: extractMonthlyTarget(monthlyTargetFormula),
+        monthlyTargetFormula,
       });
     }
 

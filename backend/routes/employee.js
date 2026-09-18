@@ -331,6 +331,13 @@ router.get('/:id', requireAuth, async (req, res) => {
   const myRanks = myTop5Ranks(top5ByStage, targetId);
 
   const supervisorTargets = await getSupervisorTargetDetails(targetId, emp.name, from, to);
+  const stageTargets = await getStageTargets(
+    targetId,
+    emp.target_shift || emp.shift,
+    from,
+    to,
+    month
+  );
 
   // Return every shift snapshot for this employee. The canonical employee
   // profile/KPIs still come from employees + employee_summary, while duplicate
@@ -365,11 +372,44 @@ router.get('/:id', requireAuth, async (req, res) => {
     summary,
     attendance: { present_days: Number(attendance.present_days || 0), absent_days: Number(attendance.absent_days || 0) },
     stages: byStage,
+    stageTargets,
     shiftProfiles,
     myRanks,
     supervisorTargets,
   });
 });
+
+async function getStageTargets(employeeId, shift, from, to, month) {
+  const params = [employeeId, String(shift || 'Other').trim() || 'Other'];
+  let sql = `
+    SELECT stage, target_monthly, month_start, source_formula
+    FROM employee_stage_targets
+    WHERE employee_id = ? AND shift = ?`;
+
+  if (/^\d{4}-(0[1-9]|1[0-2])$/.test(String(month || ''))) {
+    const monthStart = `${month}-01`;
+    const next = new Date(`${monthStart}T00:00:00Z`);
+    next.setUTCMonth(next.getUTCMonth() + 1);
+    sql += ' AND month_start >= ? AND month_start < ?';
+    params.push(monthStart, next.toISOString().slice(0, 10));
+  } else if (normalizeDate(to)) {
+    // A payroll cycle starts on the 21st. Selecting the latest target snapshot
+    // not after the requested end date keeps date-filtered details aligned
+    // without discarding a cycle that started before `from`.
+    sql += ' AND month_start <= ?';
+    params.push(to);
+  }
+
+  sql += ' ORDER BY month_start DESC, updated_at DESC, stage';
+  const rows = await db.prepare(sql).all(...params);
+  const targets = {};
+  for (const row of rows) {
+    if (targets[row.stage] !== undefined) continue;
+    const value = Number(row.target_monthly);
+    if (Number.isFinite(value) && value > 0) targets[row.stage] = value;
+  }
+  return targets;
+}
 
 /**
  * "تفاصيل تارجت الاشراف" — daily supervisor-target rows for this employee

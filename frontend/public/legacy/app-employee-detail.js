@@ -32,30 +32,11 @@
     return text === '—' ? '—' : `<span class="target-percent ${percentClass(value)}">${text}</span>`;
   }
 
-  // Master's own AO column divides each stage's monthly total by a fixed
-  // number (e.g. =AN311/6000 for CREATION) to get that stage's percentage —
-  // it's not exported anywhere in the API, so it's copied here verbatim from
-  // the Master sheet's formulas (checked against every employee in the file,
-  // no conflicts). NOTE: this table is specific to the Shift A file — if
-  // other shifts use different monthly targets per stage, this needs updating
-  // with their numbers, or (better long-term) the import should store each
-  // stage's target in the database so the frontend never has to hardcode it.
-  const STAGE_MONTHLY_TARGET = {
-    'RE_FILE': 800, 'CREATION': 6000, 'LABBLE': 2200, 'DATA ENTREY': 10000,
-    'PREPARATION': 200000, 'SCAN FUJITSU': 500000, 'SCAN KODAK': 575000,
-    'REASSIMBLE': 9375, 'CHECK': 21875, 'PALLET DELIVAREY': 5400,
-    'CLASSIFICATION': 875000, 'INDEXING': 160000, 'JOB REVIEW': 2700,
-    'SUSPEND': 154, 'TIME': 140,
-  };
-  function stageTarget(stageName) {
-    const key = String(stageName || '').trim().toUpperCase();
-    return STAGE_MONTHLY_TARGET[key] ?? null;
-  }
-
   (async () => {
     try {
       const d = await api('/api/employee/' + encodeURIComponent(id));
       const e = d.employee, s = d.summary || {}, a = d.attendance || {};
+      const stageTargets = d.stageTargets || {};
 
       $('detail-title').textContent = 'بيانات ' + e.name;
       $('detail-info').innerHTML = `<div class="info-item"><span>ID</span><b>${esc(e.id)}</b></div><div class="info-item"><span>الاسم</span><b>${esc(e.name)}</b></div><div class="info-item"><span>الشركة</span><b>${esc(e.company)}</b></div><div class="info-item"><span>الشيفت</span><b>${esc(e.shift)}</b></div><div class="info-item"><span>القسم</span><b>${esc(e.department)}</b></div><div class="info-item"><span>الفئة</span><b>${esc(e.education)}</b></div><div class="info-item"><span>الإقامة</span><b>${esc(e.residence)}</b></div>`;
@@ -86,8 +67,9 @@
           if (typeof v === 'number') { sum += v; hasNum = true; return '<td>' + n(v) + '</td>'; }
           return '<td>' + esc(v) + '</td>';
         }).join('');
-        const target = isAttendance ? null : stageTarget(st);
-        const stagePercent = hasNum && target ? coloredPercent(sum / target) : '—';
+        const target = isAttendance ? null : Number(stageTargets[st]);
+        const hasTarget = Number.isFinite(target) && target > 0;
+        const stagePercent = hasNum && hasTarget ? coloredPercent(sum / target) : '—';
         return '<tr><td>' + esc(st) + '</td>' + cells + '<td>' + (hasNum ? n(sum) : '—') + '</td><td>' + (target ? n(target) : '—') + '</td><td>' + stagePercent + '</td></tr>';
       });
 

@@ -116,6 +116,7 @@ router.post('/import-master', requireAuth, requireUploader, async (req, res) => 
       let created = 0;
       let updated = 0;
       let daily = 0;
+      let stageTargets = 0;
       let skipped = 0;
       const newCredentials = [];
       const updatedEmployees = [];
@@ -265,6 +266,61 @@ router.post('/import-master', requireAuth, requireUploader, async (req, res) => 
         );
       }
 
+      // Persist the monthly target encoded in each stage's Master!AO formula.
+      // Targets are keyed by employee, shift, and payroll cycle so a later
+      // import can change them without rewriting historical months.
+      const stageTargetMap = new Map();
+      for (const profileRow of shiftProfilesToUpsert) {
+        for (const stage of profileRow.profile?.stages || []) {
+          const target = Number(stage.monthlyTarget);
+          if (!stage.role || stage.role === 'الحضور' || !Number.isFinite(target) || target <= 0) continue;
+          const key = `${profileRow.employeeId}|${profileRow.shift}|${stage.role}`;
+          stageTargetMap.set(key, {
+            employeeId: profileRow.employeeId,
+            shift: profileRow.shift,
+            stage: stage.role,
+            target,
+            sourceFormula: stage.monthlyTargetFormula || null,
+          });
+        }
+      }
+      const stageTargetRows = [...stageTargetMap.values()];
+      const targetEmployeeIds = [...new Set(shiftProfilesToUpsert.map(x => x.employeeId))];
+      const targetShifts = [...new Set(shiftProfilesToUpsert.map(x => x.shift))];
+      if (targetEmployeeIds.length && targetShifts.length) {
+        // If a formula disappears from a re-import, remove the old value for
+        // that cycle instead of silently showing a stale target.
+        await db.query(
+          `DELETE FROM employee_stage_targets
+           WHERE employee_id = ANY($1::int[]) AND month_start = $2::date
+             AND shift = ANY($3::text[])`,
+          [targetEmployeeIds, monthStart, targetShifts]
+        );
+      }
+      for (const batch of chunks(stageTargetRows, CHUNK)) {
+        if (!batch.length) continue;
+        await db.query(
+          `INSERT INTO employee_stage_targets
+             (employee_id, shift, month_start, stage, target_monthly, source_formula)
+           SELECT employee_id, shift, month_start, stage, target_monthly, source_formula
+           FROM unnest($1::int[], $2::text[], $3::date[], $4::text[], $5::float8[], $6::text[])
+             AS t(employee_id, shift, month_start, stage, target_monthly, source_formula)
+           ON CONFLICT (employee_id, shift, month_start, stage) DO UPDATE SET
+             target_monthly = excluded.target_monthly,
+             source_formula = excluded.source_formula,
+             updated_at = CURRENT_TIMESTAMP`,
+          [
+            batch.map(x => x.employeeId),
+            batch.map(x => x.shift),
+            batch.map(() => monthStart),
+            batch.map(x => x.stage),
+            batch.map(x => x.target),
+            batch.map(x => x.sourceFormula),
+          ]
+        );
+        stageTargets += batch.length;
+      }
+
       // 4) For a normal Master re-import, replace ONLY the imported payroll
       // cycle's daily rows. Never delete older cycles (21->20 history).
       if (!merge && validRows.length) {
@@ -399,7 +455,7 @@ router.post('/import-master', requireAuth, requireUploader, async (req, res) => 
         );
       }
 
-      return { created, updated, daily, skipped, newCredentials, updatedEmployees, createdEmployees, supervisorLinked, supervisorUnmatched };
+      return { created, updated, daily, stageTargets, skipped, newCredentials, updatedEmployees, createdEmployees, supervisorLinked, supervisorUnmatched };
     });
 
     const result = await tx(employees);
@@ -471,14 +527,14 @@ router.post('/import-master', requireAuth, requireUploader, async (req, res) => 
     `).run(
       req.user.id, req.user.name || null, filename || 'Master.xlsx', monthStart, result.updated, result.created,
       result.daily, result.skipped, result.supervisorLinked, result.supervisorUnmatched,
-      JSON.stringify({ updatedEmployees: result.updatedEmployees, createdEmployees: result.createdEmployees })
+      JSON.stringify({ updatedEmployees: result.updatedEmployees, createdEmployees: result.createdEmployees, stageTargets: result.stageTargets })
     );
 
-    await writeAudit(req, 'import_master', 'import', null, { filename: filename || 'Master.xlsx', month_start: monthStart, updated: result.updated, created: result.created, daily: result.daily, skipped: result.skipped });
+    await writeAudit(req, 'import_master', 'import', null, { filename: filename || 'Master.xlsx', month_start: monthStart, updated: result.updated, created: result.created, daily: result.daily, stage_targets: result.stageTargets, skipped: result.skipped });
     // New employee passwords are intentionally returned once to the admin so they can be distributed.
     res.json({
       ok: true,
-      message: `تم استيراد شيت Master بنجاح: ${result.updated} موظف محدث، ${result.created} موظف جديد، ${result.daily} سجل يومي. تفاصيل تارجت الاشراف: ${result.supervisorLinked} سجل مربوط بموظف${result.supervisorUnmatched ? `، ${result.supervisorUnmatched} سجل بدون تطابق اسم` : ''}. الحالة: ${statusActive} نشط، ${statusLeft} غادر، ${statusArchive} أرشيف.`,
+      message: `تم استيراد شيت Master بنجاح: ${result.updated} موظف محدث، ${result.created} موظف جديد، ${result.daily} سجل يومي، ${result.stageTargets} تارجت مرحلة محفوظ. تفاصيل تارجت الاشراف: ${result.supervisorLinked} سجل مربوط بموظف${result.supervisorUnmatched ? `، ${result.supervisorUnmatched} سجل بدون تطابق اسم` : ''}. الحالة: ${statusActive} نشط، ${statusLeft} غادر، ${statusArchive} أرشيف.`,
       ...result,
       statusActive,
       statusLeft,
