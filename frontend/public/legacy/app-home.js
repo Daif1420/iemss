@@ -541,11 +541,20 @@ async function loadSelfView(dashData) {
     });
     const totalAchievementPercent = canonicalHasPercent ? canonicalPercentSum : null;
 
+    // إجمالي تارجت الإشراف يُحسب من كل قيم "التارجت الشهري" الموجودة
+    // في تفاصيل الإشراف، وليس من متغير محلي يتم تعريفه لاحقًا.
+    const supervisorMonthlyTargetTotal = Object.values(data.supervisorTargets || {})
+      .flatMap(rows => rows || [])
+      .reduce((sum, r) => {
+        const n = Number(r?.targetMonthly);
+        return Number.isFinite(n) ? sum + n : sum;
+      }, 0);
+    const hasSupervisorMonthlyTarget = Number.isFinite(supervisorMonthlyTargetTotal) && supervisorMonthlyTargetTotal !== 0;
+
     if ($('emp-perf-card')) {
       $('emp-perf-card').innerHTML = `
-        <div class="info-item"><span>نسبة التارجت</span><b class="accent-value">${fmtPercent(totalAchievementPercent)}</b></div><div class="info-item"><span>إجمالي تارجت الإشراف</span><b class="accent-value">${hasSupervisorMonthlyTarget ? fmtPercent(supervisorMonthlyTargetTotal) : '—'}</b></div>
-        <div class="info-item"><span>إجمالي الإنجاز</span><b class="accent-value">${fmtNumber(canonicalAchievement)}</b></div>
-        <div class="info-item"><span>إجمالي التارجت</span><b>${fmtNumber(canonicalTarget)}</b></div>
+        <div class="info-item"><span>نسبة التارجت</span><b class="accent-value">${fmtPercent(totalAchievementPercent)}</b></div>
+        <div class="info-item"><span>إجمالي تارجت الإشراف</span><b class="accent-value">${hasSupervisorMonthlyTarget ? fmtPercent(supervisorMonthlyTargetTotal) : '—'}</b></div>
         <div class="info-item"><span>أيام الحضور</span><b class="accent-value">${fmtAttendanceNumber(s.total_present_days ?? a.present_days)}</b></div>
         <div class="info-item"><span>رقم الشريحة</span><b>${escapeHtml(s.bonus_tier ?? '—')}</b></div>
         <div class="info-item"><span>إجمالي طبيعة العمل</span><b>${fmtNumber(s.work_nature_allowance)}</b></div>
@@ -568,12 +577,6 @@ async function loadSelfView(dashData) {
       const bonusTier = s.bonus_tier;
       const bonusTierNum = Number(bonusTier);
       const bonusTierDisplay = (bonusTier !== null && bonusTier !== undefined && bonusTier !== '' && Number.isFinite(bonusTierNum)) ? Math.round(bonusTierNum) : bonusTier;
-      const supervisorMonthlyTargetTotal = Object.values(data.supervisorTargets || {}).flatMap(rows => rows || []).reduce((sum, r) => {
-        const n = Number(r.targetMonthly);
-        return Number.isFinite(n) ? sum + n : sum;
-      }, 0);
-      const hasSupervisorMonthlyTarget = Number.isFinite(supervisorMonthlyTargetTotal) && supervisorMonthlyTargetTotal !== 0;
-
       const rawKpis = [
         { label: 'نسبة التارجت الشهري', raw: totalAchievementPercent, display: fmtPercent(totalAchievementPercent), cls: 'blue', icon: 'rate' },
          ...(hasSupervisorMonthlyTarget ? [{ label: 'إجمالي تارجت الإشراف', raw: supervisorMonthlyTargetTotal, display: fmtPercent(supervisorMonthlyTargetTotal), cls: 'purple', icon: 'chart' }] : []),
