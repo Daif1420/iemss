@@ -331,13 +331,35 @@ router.get('/:id', requireAuth, async (req, res) => {
   const myRanks = myTop5Ranks(top5ByStage, targetId);
 
   const supervisorTargets = await getSupervisorTargetDetails(targetId, emp.name, from, to);
-  const stageTargets = await getStageTargets(
+  let stageTargets = await getStageTargets(
     targetId,
     emp.target_shift || emp.shift,
     from,
     to,
     month
   );
+
+  // Safety net for employees imported before employee_stage_targets existed,
+  // or for an import where the target table was created but a target could not
+  // be read yet. The importer stores the complete stage snapshot in
+  // employee_shift_profiles, so the employee page can still display the exact
+  // target that came from the workbook. DB rows always win, which means a later
+  // import automatically replaces an old target.
+  {
+    const fallbackProfile = await db.prepare(
+      `SELECT profile_json FROM employee_shift_profiles WHERE employee_id = ? AND shift = ?`
+    ).get(targetId, String(emp.target_shift || emp.shift || 'Other').trim() || 'Other');
+    const stages = fallbackProfile?.profile_json?.stages || [];
+    for (const stage of stages) {
+      const value = Number(stage?.monthlyTarget);
+      if (!stage?.role || stage.role === 'الحضور') continue;
+      // Keep the database snapshot as the source of truth when it exists;
+      // only fill gaps from the imported profile snapshot.
+      if (stageTargets[stage.role] === undefined && Number.isFinite(value) && value > 0) {
+        stageTargets[stage.role] = value;
+      }
+    }
+  }
 
   // Return every shift snapshot for this employee. The canonical employee
   // profile/KPIs still come from employees + employee_summary, while duplicate

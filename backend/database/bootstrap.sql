@@ -98,7 +98,7 @@ CREATE INDEX IF NOT EXISTS idx_stage_daily_emp ON stage_daily(employee_id);
 CREATE INDEX IF NOT EXISTS idx_stage_daily_date ON stage_daily(entry_date);
 CREATE INDEX IF NOT EXISTS idx_stage_daily_stage ON stage_daily(stage);
 
--- Monthly stage targets extracted from the Master!AO formulas during import.
+-- Monthly stage targets extracted from the Master target/percentage cells during import.
 -- Keep the shift and payroll cycle in the key because the same employee can
 -- appear in more than one shift and targets may change in a later import.
 CREATE TABLE IF NOT EXISTS employee_stage_targets (
