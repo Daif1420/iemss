@@ -541,7 +541,9 @@ async function loadSelfView(dashData) {
     });
     const totalAchievementPercent = Number.isFinite(Number(s.percentage)) ? Number(s.percentage) : null;
 
-    //  في KPIs = التارجت العادي + تارجت الإشراف.
+    // "نسبة التارجت الشهري" في KPIs = النسبة الإجمالية (نفس نسبة التارجت
+    // المعروضة في كارت الأداء) + إجمالي نسبة تارجت الإشراف. مثال: نسبة
+    // إجمالية 10% + تارجت إشراف 9% => يظهر 19%.
     const supervisorMonthlyTargetTotal = Object.values(data.supervisorTargets || {})
       .flatMap(rows => rows || [])
       .reduce((sum, r) => {
@@ -549,8 +551,6 @@ async function loadSelfView(dashData) {
         return Number.isFinite(n) ? sum + n : sum;
       }, 0);
     const hasSupervisorMonthlyTarget = Number.isFinite(supervisorMonthlyTargetTotal) && supervisorMonthlyTargetTotal !== 0;
-    const combinedMonthlyTarget = canonicalTarget + (hasSupervisorMonthlyTarget ? supervisorMonthlyTargetTotal : 0);
-    const hasCombinedMonthlyTarget = Number.isFinite(combinedMonthlyTarget) && combinedMonthlyTarget > 0;
 
     if ($('emp-perf-card')) {
       $('emp-perf-card').innerHTML = `
@@ -577,10 +577,11 @@ async function loadSelfView(dashData) {
       const bonusTier = s.bonus_tier;
       const bonusTierNum = Number(bonusTier);
       const bonusTierDisplay = (bonusTier !== null && bonusTier !== undefined && bonusTier !== '' && Number.isFinite(bonusTierNum)) ? Math.round(bonusTierNum) : bonusTier;
-      const monthlyTargetPercent = Number.isFinite(Number(s.percentage)) ? Number(s.percentage) : null;
-      const hasMonthlyTargetPercent = Number.isFinite(monthlyTargetPercent);
+      const overallPercent = Number.isFinite(Number(s.percentage)) ? Number(s.percentage) : null;
+      const hasOverallPercent = Number.isFinite(overallPercent);
+      const monthlyTargetPercent = (hasOverallPercent ? overallPercent : 0) + (hasSupervisorMonthlyTarget ? supervisorMonthlyTargetTotal : 0);
+      const hasMonthlyTargetPercent = hasOverallPercent || hasSupervisorMonthlyTarget;
       const rawKpis = [
-        { label: '', raw: hasCombinedMonthlyTarget ? combinedMonthlyTarget : null, display: hasCombinedMonthlyTarget ? fmtAttendanceNumber(combinedMonthlyTarget) : '—', cls: 'blue', icon: 'target' },
         { label: 'نسبة التارجت الشهري', raw: hasMonthlyTargetPercent ? monthlyTargetPercent : null, display: hasMonthlyTargetPercent ? fmtPercent(monthlyTargetPercent) : '—', cls: 'blue', icon: 'rate' },
         { label: 'أيام الحضور', raw: presentDays, display: fmtAttendanceNumber(presentDays), cls: 'teal', icon: 'present' },
         { label: 'أيام الغياب', raw: absenceDays, display: absenceDays, cls: 'amber', icon: 'absent' },
