@@ -46,7 +46,7 @@
       const stageEntries = allEntries.filter(([name]) => String(name).trim().toUpperCase() !== 'TOTAL TARGET %');
       const dates = [...new Set(stageEntries.flatMap(([, rs]) => rs.map(x => x.date)))].sort();
 
-      $('detail-head').innerHTML = '<th>المرحلة</th>' + dates.map(x => '<th>' + esc(String(x).slice(5)) + '</th>').join('') + '<th>الإجمالي</th><th>التارجت الشهري</th><th>النسبة</th>';
+      $('detail-head').innerHTML = '<th>المرحلة</th>' + dates.map(x => '<th>' + esc(String(x).slice(5)) + '</th>').join('') + '<th>الإجمالي</th><th>التارجت الشهري</th><th>نسبة الإنجاز</th><th>النسبة الإجمالية</th>';
 
       // النسبة الإجمالية = مجموع نسبة كل مرحلة على حدة (إنجازها ÷ تارجتها)،
       // مش قسمة إجمالي الإنجاز على إجمالي التارجت. كل مرحلة بتحسب مرة واحدة
@@ -77,13 +77,13 @@
       });
 
       const overallPercent = hasAnyStagePercent ? overallPercentSum : null;
-      $('detail-overall').innerHTML = `<span class="overall-percent ${percentClass(overallPercent)}">${p(overallPercent)}</span><span class="overall-percent-label">النسبة الإجمالية</span>`;
+      $('detail-overall').innerHTML = '';
 
       // نسبة التارجت هنا فوق = نفس مجموع نسب المراحل (زي بادج النسبة
       // الإجمالية بالظبط)، مش Master!AP. وإجمالي الإنجاز/التارجت هنا = مجموع
       // كل المراحل الحقيقي، مش summary.total_target الخام (رقم واحد مستورد
       // من صف واحد بالشيت زي 30000 مش له علاقة بمجموع المراحل الفعلي).
-      $('detail-perf').innerHTML = `<div class="info-item"><span>نسبة التارجت</span><b>${coloredPercent(overallPercent)}</b></div><div class="info-item"><span>إجمالي الإنجاز</span><b>${n(grandAchievement)}</b></div><div class="info-item"><span>إجمالي التارجت</span><b>${n(grandTarget)}</b></div><div class="info-item"><span>أيام الحضور</span><b>${n(s.total_present_days ?? a.present_days)}</b></div><div class="info-item"><span>إجمالي الغياب</span><b>${n(s.total_absence)}</b></div><div class="info-item"><span>الإضافي</span><b>${hh(s.overtime_hours)}</b></div><div class="info-item"><span>التأخيرات</span><b>${hh(s.late_hours)}</b></div>`;
+      $('detail-perf').innerHTML = `<div class="info-item"><span>نسبة التارجت</span><b>${coloredPercent(overallPercent)}</b></div><div class="info-item"><span>أيام الحضور</span><b>${n(s.total_present_days ?? a.present_days)}</b></div><div class="info-item"><span>إجمالي الغياب</span><b>${n(s.total_absence)}</b></div><div class="info-item"><span>الإضافي</span><b>${hh(s.overtime_hours)}</b></div><div class="info-item"><span>التأخيرات</span><b>${hh(s.late_hours)}</b></div>`;
 
       if (totalTargetEntry) {
         const m = Object.fromEntries(totalTargetEntry[1].map(x => [x.date, x.value]));
@@ -93,9 +93,13 @@
           const num = Number(v);
           return '<td>' + (Number.isFinite(num) ? coloredPercent(num) : esc(v)) + '</td>';
         }).join('');
-        rowsHtml.push('<tr class="total-target-row"><td><b>إجمالي التارجت</b></td>' + cells + '<td>—</td><td>—</td><td>' + coloredPercent(overallPercent) + '</td></tr>');
+        rowsHtml.push('<tr class="total-target-row"><td><b>إجمالي التارجت اليومي</b></td>' + cells + '<td>—</td><td>—</td><td>' + coloredPercent(overallPercent) + '</td></tr>');
       }
 
+      if (rowsHtml.length) {
+        const merged = `<td class="detail-percentage-merged" rowspan="${rowsHtml.length}"><b>${coloredPercent(overallPercent)}</b><small>النسبة الإجمالية</small></td>`;
+        rowsHtml[0] = rowsHtml[0].replace('</tr>', merged + '</tr>');
+      }
       $('detail-body').innerHTML = rowsHtml.join('') || '<tr><td colspan="' + (dates.length + 4) + '"><div class="empty-state">لا توجد بيانات مطابقة.</div></td></tr>';
     } catch (err) {
       $('detail-title').textContent = 'خطأ';

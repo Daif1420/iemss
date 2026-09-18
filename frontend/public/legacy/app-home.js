@@ -543,7 +543,7 @@ async function loadSelfView(dashData) {
 
     if ($('emp-perf-card')) {
       $('emp-perf-card').innerHTML = `
-        <div class="info-item"><span>نسبة التارجت</span><b class="accent-value">${fmtPercent(totalAchievementPercent)}</b></div>
+        <div class="info-item"><span>نسبة التارجت</span><b class="accent-value">${fmtPercent(totalAchievementPercent)}</b></div><div class="info-item"><span>إجمالي تارجت الإشراف</span><b class="accent-value">${hasSupervisorMonthlyTarget ? fmtPercent(supervisorMonthlyTargetTotal) : '—'}</b></div>
         <div class="info-item"><span>إجمالي الإنجاز</span><b class="accent-value">${fmtNumber(canonicalAchievement)}</b></div>
         <div class="info-item"><span>إجمالي التارجت</span><b>${fmtNumber(canonicalTarget)}</b></div>
         <div class="info-item"><span>أيام الحضور</span><b class="accent-value">${fmtAttendanceNumber(s.total_present_days ?? a.present_days)}</b></div>
@@ -568,8 +568,15 @@ async function loadSelfView(dashData) {
       const bonusTier = s.bonus_tier;
       const bonusTierNum = Number(bonusTier);
       const bonusTierDisplay = (bonusTier !== null && bonusTier !== undefined && bonusTier !== '' && Number.isFinite(bonusTierNum)) ? Math.round(bonusTierNum) : bonusTier;
+      const supervisorMonthlyTargetTotal = Object.values(data.supervisorTargets || {}).flatMap(rows => rows || []).reduce((sum, r) => {
+        const n = Number(r.targetMonthly);
+        return Number.isFinite(n) ? sum + n : sum;
+      }, 0);
+      const hasSupervisorMonthlyTarget = Number.isFinite(supervisorMonthlyTargetTotal) && supervisorMonthlyTargetTotal !== 0;
+
       const rawKpis = [
         { label: 'نسبة التارجت الشهري', raw: totalAchievementPercent, display: fmtPercent(totalAchievementPercent), cls: 'blue', icon: 'rate' },
+         ...(hasSupervisorMonthlyTarget ? [{ label: 'إجمالي تارجت الإشراف', raw: supervisorMonthlyTargetTotal, display: fmtPercent(supervisorMonthlyTargetTotal), cls: 'purple', icon: 'chart' }] : []),
         { label: 'أيام الحضور', raw: presentDays, display: fmtAttendanceNumber(presentDays), cls: 'teal', icon: 'present' },
         { label: 'أيام الغياب', raw: absenceDays, display: absenceDays, cls: 'amber', icon: 'absent' },
         { label: 'رقم الشريحة', raw: bonusTier, display: bonusTierDisplay, cls: 'purple', icon: 'chart' }
@@ -629,7 +636,7 @@ async function loadSelfView(dashData) {
       stageEntries.forEach(([, rows]) => rows.forEach(r => dateSet.add(r.date)));
       if (totalTargetEntry) totalTargetEntry[1].forEach(r => dateSet.add(r.date));
       const dates = [...dateSet].sort();
-       const head = '<th>المرحلة</th>' + dates.map(d => `<th><span class="detail-date-head"><span class="detail-day">${detailWeekday(d)}</span><strong class="detail-date">${escapeHtml(d.slice(8) + '/' + d.slice(5, 7))}</strong></span></th>`).join('') + '<th>الإجمالي</th><th>التارجت الشهري</th><th>نسبة الإنجاز</th>';
+       const head = '<th>المرحلة</th>' + dates.map(d => `<th><span class="detail-date-head"><span class="detail-day">${detailWeekday(d)}</span><strong class="detail-date">${escapeHtml(d.slice(8) + '/' + d.slice(5, 7))}</strong></span></th>`).join('') + '<th>الإجمالي</th><th>التارجت الشهري</th><th>نسبة الإنجاز</th><th>النسبة الإجمالية</th>';
 
       if (!stageEntries.length && !totalTargetEntry) {
         return `${showShiftHeading ? `<div class="shift-detail-heading"><span>تفاصيل Shift ${escapeHtml(profile.shift)}</span></div>` : ''}<div class="table-wrap"><table><thead><tr>${head}</tr></thead><tbody><tr><td colspan="${dates.length + 4}"><div class="empty-state">لا توجد بيانات مطابقة.</div></td></tr></tbody></table></div>`;
@@ -688,10 +695,13 @@ async function loadSelfView(dashData) {
       }
 
       // بادج "النسبة الإجمالية" الأزرق جنب الجدول، بنفس شكل صفحة الأدمن.
-      const overallBadge = `<div class="overall-percent-badge"><span class="overall-percent ${percentClass(overallStagePercent)}">${fmtPercent(overallStagePercent)}</span><span class="overall-percent-label">النسبة الإجمالية</span></div>`;
+      if (stageRows.length) {
+        const merged = `<td class="detail-percentage-merged" rowspan="${stageRows.length}"><b>${coloredPercent(overallStagePercent)}</b><small>النسبة الإجمالية</small></td>`;
+        stageRows[0] = stageRows[0].replace('</tr>', merged + '</tr>');
+      }
       const table = `<div class="table-wrap shift-detail-table"><table><thead><tr>${head}</tr></thead><tbody>${stageRows.join('')}</tbody></table></div>`;
 
-      return `${showShiftHeading ? `<div class="shift-detail-heading"><span>تفاصيل Shift ${escapeHtml(profile.shift)}</span></div>` : ''}<div class="daily-details-wrap">${overallBadge}${table}</div>`;
+      return `${showShiftHeading ? `<div class="shift-detail-heading"><span>تفاصيل Shift ${escapeHtml(profile.shift)}</span></div>` : ''}<div class="daily-details-wrap">${table}</div>`;
     }
 
     const profilesToShow = normalizedProfiles.length > 1 ? normalizedProfiles : [{ shift: emp.shift || 'Other', stages: data.stages || {}, stageTargets: globalStageTargets, summary: s, employee: emp }];

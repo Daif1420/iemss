@@ -19,3 +19,8 @@ html[data-theme="dark"] .target-percent-high{color:#4ade80}
 .overall-percent.target-percent-mid{color:#f2b705}
 .overall-percent.target-percent-high{color:#0aac5e}
 @media(max-width:680px){.daily-details-wrap{flex-direction:column-reverse}.overall-percent-badge{flex-direction:row;justify-content:flex-start;width:100%}}
+
+/* Merged overall percentage column: full-height blue brand column */
+.detail-percentage-merged{vertical-align:middle!important;text-align:center!important;min-width:130px!important;width:130px;background:var(--primary)!important;color:#fff!important;font-weight:950!important;border-left:3px solid var(--primary)!important;border-right:3px solid var(--primary)!important}
+.detail-percentage-merged b{display:block!important;color:#fff!important;font-size:18px!important;line-height:1.2}
+.detail-percentage-merged small{display:block!important;margin-top:5px!important;color:rgba(255,255,255,.9)!important;font-size:10px!important;font-weight:800}

@@ -676,3 +676,8 @@ html[data-theme="dark"] .info-item.rank-badge-item{background:linear-gradient(13
 }
 #modern-dashboard #kpi-grid > .kpi-link-wrap::before,
 #modern-dashboard #kpi-grid > .kpi-card2::before{display:none!important}
+
+/* Merged overall percentage column: full-height blue brand column */
+.detail-percentage-merged{vertical-align:middle!important;text-align:center!important;min-width:130px!important;width:130px;background:var(--primary)!important;color:#fff!important;font-weight:950!important;border-left:3px solid var(--primary)!important;border-right:3px solid var(--primary)!important}
+.detail-percentage-merged b{display:block!important;color:#fff!important;font-size:18px!important;line-height:1.2}
+.detail-percentage-merged small{display:block!important;margin-top:5px!important;color:rgba(255,255,255,.9)!important;font-size:10px!important;font-weight:800}
