@@ -547,7 +547,7 @@ async function loadSelfView(dashData) {
         canonicalHasPercent = true;
       }
     });
-    const totalAchievementPercent = Number.isFinite(Number(s.percentage)) ? Number(s.percentage) : null;
+    const totalAchievementPercent = canonicalHasPercent ? canonicalPercentSum : (Number.isFinite(Number(s.percentage)) ? Number(s.percentage) : null);
 
     // "نسبة التارجت الشهري" في KPIs = النسبة الإجمالية (نفس نسبة التارجت
     // المعروضة في كارت الأداء) + إجمالي نسبة تارجت الإشراف. مثال: نسبة
@@ -585,7 +585,7 @@ async function loadSelfView(dashData) {
       const bonusTier = s.bonus_tier;
       const bonusTierNum = Number(bonusTier);
       const bonusTierDisplay = (bonusTier !== null && bonusTier !== undefined && bonusTier !== '' && Number.isFinite(bonusTierNum)) ? Math.round(bonusTierNum) : bonusTier;
-      const overallPercent = Number.isFinite(Number(s.percentage)) ? Number(s.percentage) : null;
+      const overallPercent = canonicalHasPercent ? canonicalPercentSum : (Number.isFinite(Number(s.percentage)) ? Number(s.percentage) : null);
       const hasOverallPercent = Number.isFinite(overallPercent);
       const monthlyTargetPercent = (hasOverallPercent ? overallPercent : 0) + (hasSupervisorMonthlyTarget ? supervisorMonthlyTargetTotal : 0);
       const hasMonthlyTargetPercent = hasOverallPercent || hasSupervisorMonthlyTarget;
@@ -656,10 +656,10 @@ async function loadSelfView(dashData) {
         return `${showShiftHeading ? `<div class="shift-detail-heading"><span>تفاصيل Shift ${escapeHtml(profile.shift)}</span></div>` : ''}<div class="table-wrap"><table><thead><tr>${head}</tr></thead><tbody><tr><td colspan="${dates.length + 4}"><div class="empty-state">لا توجد بيانات مطابقة.</div></td></tr></tbody></table></div>`;
       }
 
-      // النسبة الإجمالية المعروضة للموظف = النسبة الشهرية الأصلية من Master/AP.
-      // نسب المراحل الفردية فقط هي التي تُحسب مقابل تارجت كل مرحلة.
-      const overallPercentSum = Number.isFinite(Number(s.percentage)) ? Number(s.percentage) : null;
-      const hasAnyStagePercent = overallPercentSum != null;
+      // النسبة الإجمالية = تُحسب من الفترة المعروضة: مجموع نسب المراحل، ونسبة كل
+      // مرحلة = إنجازها في الفترة ÷ تارجتها. كانت تُسحب جاهزة من s.percentage
+      // (آخر دورة مستوردة) فلا تتغير بتغيّر الفترة أو الدورة المختارة.
+      let overallPercentSum = 0, hasAnyStagePercent = false;
       let grandAchievement = 0, hasGrandAchievement = false;
       let grandTarget = 0, hasGrandTarget = false;
 
@@ -680,6 +680,7 @@ async function loadSelfView(dashData) {
          const hasStageTarget = Number.isFinite(stageTarget) && stageTarget > 0;
          const stageRatio = !isAttendance && hasNum && hasStageTarget ? sum / stageTarget : null;
 
+         if (stageRatio != null) { overallPercentSum += stageRatio; hasAnyStagePercent = true; }
          if (!isAttendance && hasNum) { grandAchievement += sum; hasGrandAchievement = true; }
          if (!isAttendance && hasStageTarget) { grandTarget += stageTarget; hasGrandTarget = true; }
          const stagePercent = stageRatio != null ? fmtPercent(stageRatio) : '—';
