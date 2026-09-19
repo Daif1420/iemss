@@ -33,11 +33,8 @@
     
 
     <section class="emp-search-row">
-      <input type="text" id="emp-search" placeholder="ابحث بالاسم أو الـID...">
-      <div style="display:flex;align-items:center">
-        <div class="emp-total-badge">إجمالي الموظفين النشطين: <span id="emp-total">—</span></div>
-      </div>
-    </section>
+      <input type="search" id="emp-search" name="emp_search_q" autocomplete="off" autocorrect="off" spellcheck="false" readonly onfocus="this.removeAttribute('readonly')" placeholder="ابحث بالاسم أو الـID...">
+</section>
 
     <section class="emp-filter-row">
       <div class="field"><label for="filter-shift">الشيفت</label><select id="filter-shift"><option value="__ALL__">الكل</option></select></div>
@@ -85,7 +82,7 @@
     <h3>إعدادات حسابي</h3>
     <p class="muted" style="margin-bottom:12px">يمكنك تغيير اسمك وكلمة مرورك. لا يمكن لأي مدير آخر تعديل الحساب الأساسي من إدارة الموظفين.</p>
     <div class="field"><label for="my-name">الاسم</label><input type="text" id="my-name"></div>
-    <div class="field"><label for="my-current-password">كلمة المرور الحالية</label><input type="password" id="my-current-password" autocomplete="current-password"></div>
+    <div class="field"><label for="my-current-password">كلمة المرور الحالية</label><input type="password" id="my-current-password" autocomplete="new-password"></div>
     <div class="field"><label for="my-new-password">كلمة المرور الجديدة</label><input type="password" id="my-new-password" autocomplete="new-password" placeholder="اتركها كما هي إذا لا تريد تغييرها"></div>
     <div class="modal-error" id="my-account-error"></div>
     <div class="modal-actions"><button class="cancel" id="my-account-cancel">إلغاء</button><button class="save" id="my-account-save">حفظ</button></div>

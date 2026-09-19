@@ -312,7 +312,6 @@ async function loadEmployees() {
       allEmployees = allEmployees.filter(e => String(e.company||'').toUpperCase().includes(wanted) || (companyParam==='smart' && String(e.company||'').toUpperCase()==='SB'));
     }
     if (educationParam) allEmployees = allEmployees.filter(e => String(e.education||'') === educationParam);
-    $('emp-total').textContent = total ?? employees.filter(e => (e.role || 'employee') === 'employee').length;
     populateFilterOptions();
     renderTable(getFiltered());
   } catch (e) {
@@ -321,6 +320,17 @@ async function loadEmployees() {
 }
 
 $('emp-search').addEventListener('input', () => renderTable(getFiltered()));
+// Browsers may autofill this box with the saved login ID (it looks like a
+// "username" field next to the password inputs in the My Account modal).
+// Clear any value the user did not type, and keep the table in sync.
+{
+  let typed = false;
+  $('emp-search').addEventListener('keydown', () => { typed = true; });
+  [0, 300, 1000, 2500].forEach(ms => setTimeout(() => {
+    const el = $('emp-search');
+    if (el && !typed && el.value) { el.value = ''; renderTable(getFiltered()); }
+  }, ms));
+}
 
 // ---- Role change dropdown ----
 // ---- Role change + supervisor shift assignment ----
@@ -360,7 +370,6 @@ $('emp-table-body').addEventListener('change', async (e) => {
     await api(`/api/admin/employee/${encodeURIComponent(id)}/role`, { method:'PATCH', body:JSON.stringify({role:sel.value,supervisorShifts:[]}) });
     if (emp) { emp.role=sel.value; emp.supervisor_shifts=[]; }
     sel.className=`role-select role-${sel.value}`;
-    $('emp-total').textContent=allEmployees.filter(e2=>(e2.role||'employee')==='employee'&&(e2.status||'active')==='active').length;
   } catch(err){ sel.value=prevRole; showResult('خطأ',err.message); }
 });
 
