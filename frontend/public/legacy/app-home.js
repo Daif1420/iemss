@@ -483,6 +483,14 @@ async function loadSelfView(dashData) {
   if ($('f-from').value) params.set('from', $('f-from').value);
   if ($('f-to').value) params.set('to', $('f-to').value);
   if ($('f-stage').value) params.set('stage', $('f-stage').value);
+  // When the selected period sits inside one payroll cycle, ask for that
+  // cycle's monthly summary/targets instead of the latest-upload snapshot.
+  {
+    const cyc = v => { const d = new Date(v + 'T00:00:00Z'), y = d.getUTCFullYear(), m = d.getUTCMonth(), day = d.getUTCDate();
+      const st = new Date(Date.UTC(day >= 21 ? y : (m === 0 ? y - 1 : y), day >= 21 ? m : (m === 0 ? 11 : m - 1), 21)); return st.toISOString().slice(0, 7); };
+    const f = $('f-from').value, t = $('f-to').value;
+    if (f && t && cyc(f) === cyc(t)) params.set('month', cyc(f));
+  }
 
   try {
     const data = await api(`/api/employee/${encodeURIComponent(user.id)}?${params}`);
@@ -925,12 +933,18 @@ window.__iemsDashboardRefresh = refreshDashboard;
 
 (()=>{
 const token=sessionStorage.getItem('iems_token'),raw=sessionStorage.getItem('iems_user');if(!token||!raw){location.href='/index.html';return}const user=JSON.parse(raw),$=id=>document.getElementById(id),esc=v=>String(v??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c])),num=v=>{const n=Number(v||0);return Number.isFinite(n)?n.toLocaleString('en-US',{minimumFractionDigits:0,maximumFractionDigits:2}):'0'},pct=v=>`${Math.round(Number(v||0))}%`,api=async p=>{const r=await fetch(p,{headers:{Authorization:'Bearer '+token,'Content-Type':'application/json'}});if(r.status===401){sessionStorage.clear();location.href='/index.html';throw Error('انتهت الجلسة')}const d=await r.json();if(!r.ok)throw Error(d.error||'حدث خطأ');return d};
-let dates=[],data=null;const iso=d=>{const x=new Date(d.getTime()-d.getTimezoneOffset()*60000);return x.toISOString().slice(0,10)},fmtDate=v=>{if(!v)return'—';const[a,b,c]=v.split('-');return`${c}/${b}/${a}`},day=v=>new Date(v+'T00:00:00').toLocaleDateString('ar-EG',{weekday:'long'});
+let dates=[],data=null;
+// Payroll cycle (21st -> 20th) that contains a YYYY-MM-DD date.
+const iemsCycle=v=>{const d=new Date(v+'T00:00:00Z'),y=d.getUTCFullYear(),m=d.getUTCMonth(),day=d.getUTCDate();const st=new Date(Date.UTC(day>=21?y:(m===0?y-1:y),day>=21?m:(m===0?11:m-1),21));const en=new Date(Date.UTC(st.getUTCFullYear(),st.getUTCMonth()+1,20));return{start:st.toISOString().slice(0,10),end:en.toISOString().slice(0,10)}};
+const iso=d=>{const x=new Date(d.getTime()-d.getTimezoneOffset()*60000);return x.toISOString().slice(0,10)},fmtDate=v=>{if(!v)return'—';const[a,b,c]=v.split('-');return`${c}/${b}/${a}`},day=v=>new Date(v+'T00:00:00').toLocaleDateString('ar-EG',{weekday:'long'});
 const fill=(id,vals,label)=>{const s=$(id),cur=s.value;s.innerHTML=`<option value="__ALL__">${label}</option>`+(vals||[]).map(v=>`<option value="${esc(v)}">${esc(v)}</option>`).join('');const keep=(vals||[]).includes(cur)&&cur!=='__ALL__'?cur:'__ALL__';[...s.options].forEach(o=>o.selected=o.value===keep)};
 async function init(){const m=await api('/api/attendance/meta');dates=m.dates||[];fill('att-company',m.companies,'كل الشركات');fill('att-department',m.departments,'كل المراحل');fill('att-shift',m.shifts,'كل الشيفتات');if(dates.length){const first=dates[0],last=dates.at(-1);$('att-from').min=first;$('att-from').max=last;$('att-to').min=first;$('att-to').max=last;
   // Home starts with the full imported period. The user chooses the date range;
   // do not silently force today's date or a 7-day window.
   $('att-from').value=first; $('att-to').value=last;
+  // Every uploaded month is kept, so "all data" would add all months together.
+  // Employees start on the latest payroll cycle only (they can still widen it).
+  if(user.role==='employee'){const c=iemsCycle(last);$('att-from').value=c.start<first?first:c.start;$('att-to').value=c.end>last?last:c.end}
 }}
 const values=id=>{const el=$(id);if(!el)return[];if(el.multiple)return [...el.selectedOptions].map(o=>o.value).filter(v=>v&&v!=='__ALL__');const v=el.value;return v&&v!=='__ALL__'?[v]:[]};
 const params=()=>{const p=new URLSearchParams();[['from','att-from'],['to','att-to']].forEach(([k,id])=>{const v=$(id)?.value;if(v)p.set(k,v)});[['company','att-company'],['department','att-department'],['shift','att-shift'],['status','att-status']].forEach(([k,id])=>values(id).forEach(v=>p.append(k,v)));const q=$('att-search')?.value?.trim();if(q)p.set('search',q);return p};
@@ -1000,7 +1014,7 @@ function syncDashboardFilters(){
  // The visible attendance filter is the single source of truth on Home.
 }
 async function refresh(){const f=$('att-from').value,t=$('att-to').value;if(f&&t&&f>t){alert('تاريخ البداية يجب أن يسبق تاريخ النهاية.');return}try{const selected=await api('/api/attendance?'+params());render(selected);syncDashboardFilters();window.__iemsDashboardRefresh?.()}catch(e){$('employee-detail-body').innerHTML=`<tr><td colspan="11" class="empty-attendance">${esc(e.message)}</td></tr>`}}
-function range(k){if(!dates.length)return;const last=dates.at(-1),d=new Date(last+'T00:00:00');if(k==='all'){$('att-from').value=dates[0];$('att-to').value=last}else if(k==='today'){$('att-from').value=last;$('att-to').value=last}else{const x=new Date(d);x.setDate(d.getDate()-(k==='week'?6:30));$('att-from').value=iso(x);$('att-to').value=last}}
+function range(k){if(!dates.length)return;const last=dates.at(-1),d=new Date(last+'T00:00:00');if(k==='month'){const c=iemsCycle(last);$('att-from').value=c.start<dates[0]?dates[0]:c.start;$('att-to').value=c.end>last?last:c.end}else if(k==='all'){$('att-from').value=dates[0];$('att-to').value=last}else if(k==='today'){$('att-from').value=last;$('att-to').value=last}else{const x=new Date(d);x.setDate(d.getDate()-(k==='week'?6:30));$('att-from').value=iso(x);$('att-to').value=last}}
 if($('attendance-apply'))$('attendance-apply').onclick=refresh;
 if(!$('attendance-apply')){const host=document.querySelector('.attendance-apply-row')||document.querySelector('.attendance-filter-head-actions');if(host){const btn=document.createElement('button');btn.className='apply-btn filter-apply attendance-apply attendance-apply-full';btn.id='attendance-apply';btn.type='button';btn.title='عرض النتائج';btn.setAttribute('aria-label','عرض النتائج');btn.innerHTML='<svg viewBox="0 0 24 24" aria-hidden="true"><path d="m21 21-4.3-4.3M10.8 18a7.2 7.2 0 1 1 0-14.4 7.2 7.2 0 0 1 0 14.4Z" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round"/></svg><span>عرض النتائج</span>';host.appendChild(btn);btn.onclick=refresh;}}$('attendance-reset').onclick=async()=>{['att-company','att-department','att-shift','att-status'].forEach(clearMulti);$('att-search').value='';const first=dates[0],last=dates.at(-1);if(first&&last){$('att-from').value=first;$('att-to').value=last}await refresh()};$('att-from').onchange=()=>{if($('att-to').value&&$('att-from').value>$('att-to').value)$('att-to').value=$('att-from').value};document.querySelectorAll('.quick-ranges button[data-range]').forEach(b=>b.onclick=async()=>{range(b.dataset.range);await refresh()});function exportExcel(){if(!data){return}
 if(!window.XLSX){

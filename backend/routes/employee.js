@@ -17,6 +17,15 @@ function normalizeDate(value) {
 function list(value) { const a=Array.isArray(value)?value:String(value??'').split(','); return [...new Set(a.flatMap(v=>String(v).split(',')).map(v=>v.trim()).filter(v=>v&&v!=='__ALL__'))]; }
 function addIn(sql, params, column, values) { if (!values.length) return sql; sql += ` AND ${column} IN (${values.map(()=>'?').join(',')})`; params.push(...values); return sql; }
 
+// Payroll cycle containing `dateStr` (YYYY-MM-DD): 21st of a month -> 20th of the next.
+function payrollCycle(dateStr) {
+  const d = new Date(`${dateStr}T00:00:00Z`);
+  const y = d.getUTCFullYear(), m = d.getUTCMonth(), day = d.getUTCDate();
+  const start = new Date(Date.UTC(day >= 21 ? y : (m === 0 ? y - 1 : y), day >= 21 ? m : (m === 0 ? 11 : m - 1), 21));
+  const end = new Date(Date.UTC(start.getUTCFullYear(), start.getUTCMonth() + 1, 20));
+  return { start: start.toISOString().slice(0, 10), end: end.toISOString().slice(0, 10) };
+}
+
 function dateFilterSql(alias, from, to, params) {
   let sql = '';
   if (from) { sql += ` AND ${alias}.entry_date >= ?`; params.push(from); }
@@ -272,7 +281,21 @@ router.get('/:id', requireAuth, async (req, res) => {
   if (!emp) return res.status(404).json({ error: 'الموظف غير موجود' });
   if (req.user.role === 'supervisor' && String(emp.shift || '') !== String(req.user.shift || '')) return res.status(403).json({ error: 'يمكن للمشرف عرض موظفي الشيفت الخاص به فقط.' });
 
-  const { from, to, stage, month } = req.query;
+  let { from, to, stage, month } = req.query;
+
+  // Data from every uploaded month lives in stage_daily. With no period given,
+  // this route used to sum ALL months together, so each new upload made the
+  // employee's totals grow. Default to the latest payroll cycle (21st -> 20th)
+  // that this employee actually has data for; an explicit from/to/month still wins.
+  const hasMonth = /^\d{4}-(0[1-9]|1[0-2])$/.test(String(month || ''));
+  if (!from && !to && !hasMonth) {
+    const lastRow = await db.prepare('SELECT MAX(entry_date) AS d FROM stage_daily WHERE employee_id = ?').get(targetId);
+    const last = lastRow && lastRow.d ? String(lastRow.d).slice(0, 10) : '';
+    if (/^\d{4}-\d{2}-\d{2}$/.test(last)) {
+      const c = payrollCycle(last);
+      from = c.start; to = c.end; month = c.start.slice(0, 7);
+    }
+  }
   const summaryFields = `total_achievement, total_target, percentage, bonus_tier,
            unauthorized_absence, total_absence, work_nature_allowance,
            monthly_target, total_present_days, total_absence_days,
@@ -281,7 +304,12 @@ router.get('/:id', requireAuth, async (req, res) => {
            special_bonus_days, special_deductions`;
   let summary = {};
   if (/^\d{4}-(0[1-9]|1[0-2])$/.test(String(month || ''))) {
-    summary = (await db.prepare(`SELECT ${summaryFields} FROM employee_monthly_summary WHERE employee_id = ? AND month_start = ?`).get(targetId, `${month}-01`)) || {};
+    // month_start is stored as the cycle start (YYYY-MM-21), so match anywhere in
+    // that calendar month. The old `= YYYY-MM-01` comparison never matched.
+    const monthFirst = `${month}-01`;
+    const nextFirst = new Date(`${monthFirst}T00:00:00Z`);
+    nextFirst.setUTCMonth(nextFirst.getUTCMonth() + 1);
+    summary = (await db.prepare(`SELECT ${summaryFields} FROM employee_monthly_summary WHERE employee_id = ? AND month_start >= ? AND month_start < ? ORDER BY month_start DESC LIMIT 1`).get(targetId, monthFirst, nextFirst.toISOString().slice(0, 10))) || {};
   }
   if (!Object.keys(summary).length) {
     summary = (await db.prepare(`SELECT ${summaryFields} FROM employee_summary WHERE employee_id = ?`).get(targetId)) || {};
