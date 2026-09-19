@@ -196,7 +196,6 @@ function statusBadgeHtml(status) {
 
 function renderTable(list) {
   currentList = list;
-  $('emp-count').textContent = `${list.length} نتيجة`;
   if (!list.length) { $('emp-table-body').innerHTML = '<tr><td colspan="10"><div class="empty-state">لا توجد نتائج.</div></td></tr>'; return; }
   $('emp-table-body').innerHTML = list.map(e => `
     <tr data-id="${escapeHtml(e.id)}" class="${e.is_top5 ? 'emp-row-top5' : ''}">

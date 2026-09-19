@@ -942,12 +942,14 @@ const bindMulti=()=>document.querySelectorAll('[data-multi-filter="true"]').forE
 function kpis(t){
   if(!$('attendance-kpis'))return;
   const shared=window.__iemsKpi;
+  // 5th element = the status filter value the card drills into ('' = all
+  // statuses) and 6th = the panel to scroll to once the data is refreshed.
   const rows=[
-    ['إجمالي الحضور',t.present,'present','present'],
-    ['نسبة الحضور',pct(t.attendance_rate),'rate','rate'],
-    ['إجمالي الغياب',t.absent,'absent','absent'],
-    ['نسبة الغياب',pct(t.total?t.absent/t.total*100:0),'absence-rate','rate'],
-    ['الغياب بدون إذن',t.unauthorized,'unauthorized','unauthorized']
+    ['إجمالي الحضور',t.present,'present','present','present','employee-detail-panel'],
+    ['نسبة الحضور',pct(t.attendance_rate),'rate','rate','','daily-panel'],
+    ['إجمالي الغياب',t.absent,'absent','absent','absent','employee-detail-panel'],
+    ['نسبة الغياب',pct(t.total?t.absent/t.total*100:0),'absence-rate','rate','absent','daily-panel'],
+    ['الغياب بدون إذن',t.unauthorized,'unauthorized','unauthorized','unauthorized','employee-detail-panel']
   ];
   // Keep all 12 Home KPIs in ONE grid: 7 overview cards + 5 attendance cards.
   // The old implementation rendered them in two separate grids, which made
@@ -960,12 +962,27 @@ function kpis(t){
   // rendered by renderKpis() (above in this file) are never touched.
   target.querySelectorAll('[data-kpi-scope="attendance"]').forEach(el=>el.remove());
   const cards=rows.map((x,i)=>{
-    const [label,val,cls,icon]=x;
+    const [label,val,cls,icon,status,panel]=x;
     const value=typeof val==='string'?val:num(val);
     const h=shared.kpiCard(label,value,cls,icon,shared.KPI_TREND_SHAPES[i % shared.KPI_TREND_SHAPES.length]);
-    return `<div class="kpi-link-wrap" data-kpi-scope="attendance">${h}</div>`;
+    return `<div class="kpi-link-wrap" data-kpi-scope="attendance" data-kpi-status="${status}" data-kpi-panel="${panel}" role="button" tabindex="0" title="عرض التفاصيل">${h}</div>`;
   }).join('');
   target.insertAdjacentHTML('beforeend',cards);
+  // These cards used to be inert (cursor:pointer but no handler). Clicking one
+  // now applies the matching status filter to the attendance data below,
+  // refreshes it and scrolls to the relevant table.
+  target.querySelectorAll('[data-kpi-scope="attendance"]').forEach(c=>{
+    const go=async()=>{
+      const st=c.dataset.kpiStatus||'',panelId=c.dataset.kpiPanel;
+      const sel=$('att-status');
+      if(sel){[...sel.options].forEach(o=>{o.selected=st?o.value===st:o.value==='__ALL__'})}
+      try{await refresh()}catch(_){}
+      const panel=$(panelId);
+      if(panel&&panel.style.display!=='none')panel.scrollIntoView({behavior:'smooth',block:'start'});
+    };
+    c.onclick=go;
+    c.onkeydown=e=>{if(e.key==='Enter'||e.key===' '){e.preventDefault();go()}};
+  });
   const attendance=$('attendance-kpis');
   if(attendance) attendance.innerHTML='';
 }

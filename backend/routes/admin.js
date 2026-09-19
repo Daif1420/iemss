@@ -784,16 +784,23 @@ router.get('/overview', requireAuth, requireAdmin, async (req, res) => {
   const bravos = await count(` AND UPPER(e.company) LIKE '%BRAVOS%'`);
   const students = await count(` AND e.education = 'طالب'`);
   const graduates = await count(` AND e.education = 'خريج'`);
-  const now = new Date();
-  const defaultFrom = `${now.getUTCFullYear()}-${String(now.getUTCMonth()+1).padStart(2,'0')}-01`;
-  const np=[]; let nw=''; if(shift){nw+=' AND e.shift = ?';np.push(shift)}
-  // A "new employee" means an employee whose record was created for the first
-  // time in IEMS. Updating/importing the same ID later does not make them new.
-  if(from){nw+=' AND e.created_at::date >= ?';np.push(from)} else {nw+=' AND e.created_at::date >= ?';np.push(defaultFrom)}
-  if(to){nw+=' AND e.created_at::date <= ?';np.push(to)}
-  const newEmployees=Number((await db.prepare(`SELECT COUNT(*) c FROM employees e WHERE e.role='employee'${nw}`).get(...np)).c||0);
-  const lp=[]; let lw=''; if(shift){lw+=' AND e.shift = ?';lp.push(shift)} if(from){lw+=' AND e.left_date >= ?';lp.push(from)} if(to){lw+=' AND e.left_date <= ?';lp.push(to)}
-  const leftEmployees=Number((await db.prepare(`SELECT COUNT(*) c FROM employees e WHERE e.role='employee' AND COALESCE(e.status,'active')='left'${lw}`).get(...lp)).c||0);
+  // "New" and "Left" KPIs are roster KPIs that link to the Current-month New
+  // page and the Left page, so they must count exactly what those pages list.
+  // They used to be clipped by the Home attendance date range (the range of the
+  // imported attendance data): a departure dated after the last imported day,
+  // a left employee with no left_date, or employees created after the period
+  // all fell outside it, which is why both cards showed 0.
+  const shiftSql = shift ? ' AND e.shift = ?' : '';
+  const shiftParams = shift ? [shift] : [];
+  const newEmployees = Number((await db.prepare(
+    `SELECT COUNT(*) c FROM employees e
+      WHERE e.role='employee'${shiftSql}
+        AND e.created_at >= (date_trunc('month', NOW() AT TIME ZONE 'Africa/Cairo') AT TIME ZONE 'Africa/Cairo')`
+  ).get(...shiftParams)).c || 0);
+  const leftEmployees = Number((await db.prepare(
+    `SELECT COUNT(*) c FROM employees e
+      WHERE e.role='employee' AND e.status='left'${shiftSql}`
+  ).get(...shiftParams)).c || 0);
   res.json({ total, smart, bravos, students, graduates, other: Math.max(total-smart-bravos,0), newEmployees, leftEmployees });
 });;
 

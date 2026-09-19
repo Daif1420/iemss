@@ -26,7 +26,18 @@
 })();
 const btn = document.getElementById('login-btn');
 const errBox = document.getElementById('login-error');
-const t = (key) => (window.IEMS_I18N ? window.IEMS_I18N.t(key) : key);
+// i18n.js is not loaded on this route, so window.IEMS_I18N is undefined and t()
+// used to return the raw key ("login.submit"/"login.submitting") - that is the
+// text the button showed while (and after) logging in. Fall back to Arabic.
+const FALLBACK_AR = {
+  'login.submit': 'تسجيل الدخول',
+  'login.submitting': 'جارٍ تسجيل الدخول...',
+  'login.errFields': 'من فضلك أدخل الـID وكلمة المرور',
+};
+const t = (key) => {
+  const v = window.IEMS_I18N ? window.IEMS_I18N.t(key) : key;
+  return v && v !== key ? v : (FALLBACK_AR[key] || key);
+};
 
 const loginBtnIcon = '<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="ui-icon" aria-hidden="true"><path d="m10 17 5-5-5-5"></path><path d="M15 12H3"></path><path d="M15 3h4a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2h-4"></path></svg>';
 const loginBtnSpinner = '<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="ui-icon spin" aria-hidden="true"><path d="M21 12a9 9 0 1 1-6.219-8.56"></path></svg>';
@@ -51,28 +62,40 @@ async function doLogin() {
 
   setLoginBtnState(true);
 
+  // Never leave the button spinning forever if the server is cold-starting or
+  // the connection stalls: give up after 25s and let the user retry.
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), 25000);
+  let navigating = false;
+
   try {
     const res = await fetch('/api/auth/login', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ id, password }),
+      signal: controller.signal,
     });
     const raw = await res.text();
     let data = {};
     try { data = raw ? JSON.parse(raw) : {}; } catch (_) {
-      data = { error: raw || t('login.errFields') };
+      data = { error: 'تعذّر الاتصال بالخادم، حاول مرة أخرى.' };
     }
     if (!res.ok) throw new Error(data.error || t('login.errFields'));
+    if (!data.token || !data.user) throw new Error('استجابة غير صحيحة من الخادم.');
 
     sessionStorage.setItem('iems_token', data.token);
     sessionStorage.setItem('iems_user', JSON.stringify(data.user));
     sessionStorage.setItem('iems_show_welcome', '1'); // shown once, right after login, on the home page
+    navigating = true; // keep the "logging in..." state until the page changes
     window.location.href = '/home.html';
   } catch (e) {
-    errBox.textContent = e.message;
+    errBox.textContent = e.name === 'AbortError'
+      ? 'الخادم تأخر في الرد، حاول مرة أخرى.'
+      : e.message;
     errBox.style.display = 'block';
   } finally {
-    setLoginBtnState(false);
+    clearTimeout(timer);
+    if (!navigating) setLoginBtnState(false);
   }
 }
 

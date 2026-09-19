@@ -604,6 +604,15 @@ body,input,select,button,textarea{font-family:'Cairo',sans-serif}
 @media(max-width:430px){.app-shell > main.container{padding-top:154px}}
 
 
+/* ===== Topbar spacing fix (all pages using .attendance-page-shell) =====
+   The global rule above makes the topbar position:fixed, while the rule
+   below strips main.container's top padding down to 18px. Only Home
+   overrode the topbar back to sticky, so on Employee Management (and the
+   current/left/new/detail pages) the fixed topbar sat on top of the hero
+   title + description. Keep the topbar in flow (sticky) everywhere the
+   short 18px padding is used, so nothing is covered. */
+.app-shell.attendance-page-shell > .topbar{position:sticky;top:0}
+
 /* ===== Final spacing fix: remove the excessive gap below the fixed topbar ===== */
 .attendance-page-shell > main.container{
   padding-top:18px !important;
@@ -1094,3 +1103,20 @@ html[data-theme="dark"] .iems-credit-footer .credit-name{color:#4fa3e8}
 }
 
 @media(min-width:1051px){.report-filter-grid{display:grid!important;grid-template-columns:1fr 1fr 1.15fr 1.15fr 1fr!important;align-items:end}.report-filter-grid .filter-apply{min-width:0;max-width:none}}
+
+/* Departure modal: the global mobile rule hides every .ghost-btn (it is meant
+   for the hero "back" link). That also hid the modal's Cancel button. */
+.departure-modal .ghost-btn{display:inline-flex!important;align-items:center;justify-content:center}
+.departure-field input[type=date]{direction:ltr;text-align:right;min-width:0;width:100%;box-sizing:border-box;font-family:'Cairo',sans-serif}
+.departure-field select{width:100%;box-sizing:border-box}
+.departure-modal-card{max-height:calc(100vh - 40px);overflow-y:auto}
+.departure-modal .primary-btn,.departure-modal .ghost-btn{height:44px;padding:0 20px;border-radius:11px;font-family:'Cairo',sans-serif;font-size:13px;font-weight:800;cursor:pointer;line-height:1;white-space:nowrap}
+.departure-modal .primary-btn{border:1px solid var(--primary);background:var(--primary);color:#fff}
+.departure-modal .primary-btn:hover{filter:brightness(1.08)}
+.departure-modal .primary-btn:disabled{opacity:.6;cursor:not-allowed}
+.departure-modal .ghost-btn{border:1px solid var(--line);background:var(--panel);color:var(--text)}
+.departure-modal-actions{align-items:center}
+.departure-modal-head .icon-btn{flex:0 0 auto}
+/* The name <td> carries .emp-name-cell (display:flex) which stops it behaving
+   as a table cell: text floated up and the row background/border broke. */
+.emp-mgmt-table td.emp-name-cell{display:table-cell!important;vertical-align:middle}
