@@ -126,9 +126,20 @@ router.post('/import-master', requireAuth, requireUploader, async (req, res) => 
       // instead of one SELECT per row.
       const allEmployeesForLookup = await db.prepare('SELECT id, name, role, shift, target_shift FROM employees').all();
       const byId = new Map(allEmployeesForLookup.map(e => [e.id, e]));
+      // Rows without an ID are matched by name. Names differ slightly from month
+      // to month (double spaces, أ/ا, ى/ي, diacritics), and a miss here made an
+      // employee who already exists look "new" and get re-inserted.
+      const nameKey = v => String(v || '')
+        .replace(/[\u064B-\u065F\u0670\u0640]/g, '')
+        .replace(/[أإآٱ]/g, 'ا')
+        .replace(/ى/g, 'ي')
+        .replace(/\s+/g, ' ')
+        .trim()
+        .toLowerCase();
       const byName = new Map();
-      for (const e of allEmployeesForLookup) if (!byName.has(e.name)) byName.set(e.name, e);
+      for (const e of allEmployeesForLookup) if (!byName.has(nameKey(e.name))) byName.set(nameKey(e.name), e);
 
+      let nextGeneratedId = Math.max(900000, ...allEmployeesForLookup.map(e => Number(e.id) || 0)) + 1;
       const toInsert = []; // {id, emp_num, name, education, residence, company, shift, target_shift, department, hash}
       const toUpdate = []; // {id, emp_num, name, education, residence, company, shift, target_shift, department}
       const validRows = []; // rows that will get daily/summary data written
@@ -144,8 +155,15 @@ router.post('/import-master', requireAuth, requireUploader, async (req, res) => 
       for (const emp of rows) {
         if (!emp.id || emp.id === 0 || !emp.name) { skipped++; continue; }
 
-        const existing = emp.generatedId ? byName.get(emp.name) : byId.get(emp.id);
+        const existing = emp.generatedId ? byName.get(nameKey(emp.name)) : byId.get(emp.id);
         if (existing && emp.generatedId) emp.id = existing.id;
+        // Rows without a real ID get a temporary ID (900000+). That temp ID can
+        // already belong to a different employee created by an earlier import,
+        // which made the INSERT below fail with employees_pkey. Move to the next
+        // free ID instead.
+        if (!existing && emp.generatedId) {
+          while (byId.has(emp.id)) emp.id = nextGeneratedId++;
+        }
         if (existing && existing.role !== 'employee') { skipped++; continue; }
 
         const incomingShift = canonicalShift(emp.shift);
@@ -202,6 +220,12 @@ router.post('/import-master', requireAuth, requireUploader, async (req, res) => 
         if (!existing) {
           const hash = bcrypt.hashSync(DEFAULT_PASSWORD, 10);
           toInsert.push({ id: emp.id, emp_num: emp.emp_num || emp.id, name: emp.name, education: emp.education, residence: emp.residence, company: emp.company, shift: profileShift, target_shift: targetShift, department: emp.department, hash });
+          // Register the new employee right away. Otherwise a second row for the
+          // same ID/name in the same file (another tab, another shift) is also
+          // seen as "not existing" and queued for insert -> duplicate key.
+          const queued = { id: emp.id, name: emp.name, role: 'employee', shift: profileShift, target_shift: targetShift };
+          byId.set(emp.id, queued);
+          if (!byName.has(nameKey(emp.name))) byName.set(nameKey(emp.name), queued);
           created++;
           createdEmployees.push({ id: emp.id, name: emp.name });
           newCredentials.push({ id: emp.id, name: emp.name, password: DEFAULT_PASSWORD });
@@ -227,7 +251,12 @@ router.post('/import-master', requireAuth, requireUploader, async (req, res) => 
           `INSERT INTO employees (id, emp_num, name, education, residence, company, shift, target_shift, department, password_hash, role, must_change_password)
            SELECT id, emp_num, name, education, residence, company, shift, target_shift, department, password_hash, 'employee', false
            FROM unnest($1::int[], $2::int[], $3::text[], $4::text[], $5::text[], $6::text[], $7::text[], $8::text[], $9::text[], $10::text[])
-             AS t(id, emp_num, name, education, residence, company, shift, target_shift, department, password_hash)`,
+             AS t(id, emp_num, name, education, residence, company, shift, target_shift, department, password_hash)
+           ON CONFLICT (id) DO UPDATE SET
+             emp_num = EXCLUDED.emp_num, name = EXCLUDED.name, education = EXCLUDED.education,
+             residence = EXCLUDED.residence, company = EXCLUDED.company, shift = EXCLUDED.shift,
+             target_shift = EXCLUDED.target_shift, department = EXCLUDED.department
+           WHERE employees.role = 'employee'`,
           [
             batch.map(e => e.id), batch.map(e => Number(e.emp_num)), batch.map(e => e.name), batch.map(e => e.education),
             batch.map(e => e.residence), batch.map(e => e.company), batch.map(e => e.shift), batch.map(e => e.target_shift), batch.map(e => e.department),
