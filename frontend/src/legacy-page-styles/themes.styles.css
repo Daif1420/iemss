@@ -6,7 +6,7 @@
 .banner-preview{display:block;width:100%;height:260px;object-fit:cover}
 .banner-preview-empty{padding:30px;color:var(--muted);font-weight:700}
 .banner-actions-row{margin-top:16px}
-.banner-actions-row .danger-btn{border:0;border-radius:10px;padding:10px 15px;cursor:pointer;background:#ef4444;color:#fff}
+.banner-actions-row .danger-btn{border:0;border-radius:10px;padding:10px 15px;cursor:pointer;background: url('/login-bg.jpg') center/cover no-repeat;color:#fff}
 .creator-status{min-height:22px;font-size:11px;font-weight:800;color:var(--primary)}
 @media(max-width:760px){.banner-preview-head{align-items:flex-start;flex-direction:column}.banner-preview-wrap{min-height:190px}.banner-preview{height:190px}}
 
