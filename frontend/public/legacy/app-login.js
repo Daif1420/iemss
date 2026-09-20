@@ -1,6 +1,7 @@
 
 /* Radical project-themed login visual */
 (() => {
+  try { new Image().src = '/splash-bg.jpg'; } catch (_) {}
   // data-iems-page-style marks this as page-scoped: useLegacyScripts removes
   // it when the route unmounts. Without it, these !important login colours
   // stayed in <head> after login and bled into every other page.

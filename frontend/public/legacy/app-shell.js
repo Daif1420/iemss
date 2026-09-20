@@ -1,5 +1,13 @@
 // ---- Welcome splash screen (shown once, right after login) ----
+// To change the splash picture: replace /public/splash-bg.jpg with your own
+// image (same file name), or point SPLASH_IMAGE at another file in /public.
+// Wide (landscape) photos ~1920x1080 work best. Set SPLASH_IMAGE = '' to go
+// back to the plain gradient. SPLASH_DIM controls how dark the tint on top of
+// the picture is (0 = none, 1 = black) so the greeting stays readable.
 (() => {
+  const SPLASH_IMAGE = '/splash-bg.jpg';
+  const SPLASH_DIM = 0.45;
+  const SPLASH_FOCUS = 'center';   // e.g. 'left center', '30% 50%'
   const path = window.location.pathname.split('/').pop() || 'index.html';
   if (path !== 'home.html') return;
   if (sessionStorage.getItem('iems_show_welcome') !== '1') return;
@@ -18,7 +26,16 @@
   style.textContent = `
     #iems-splash{position:fixed;inset:0;z-index:99999;display:flex;align-items:center;justify-content:center;flex-direction:column;gap:18px;
       background:${isDark ? 'linear-gradient(135deg,#0b1220,#101a2e)' : 'linear-gradient(135deg,#065bab,#0a8fd8)'};
+      overflow:hidden;
       animation:iemsSplashOut .6s ease-in 1.7s forwards;}
+    #iems-splash > *{position:relative;z-index:2}
+    /* picture layer (slow settle-in zoom) + tint layer so text stays readable */
+    #iems-splash:before{content:"";position:absolute;inset:0;z-index:0;display:${SPLASH_IMAGE ? 'block' : 'none'};
+      background:url('${SPLASH_IMAGE}') ${SPLASH_FOCUS}/cover no-repeat;
+      transform:scale(1.08);animation:iemsSplashZoom 2.4s ease-out forwards}
+    #iems-splash:after{content:"";position:absolute;inset:0;z-index:1;display:${SPLASH_IMAGE ? 'block' : 'none'};
+      background:radial-gradient(ellipse at center,rgba(3,20,45,${Math.max(0, SPLASH_DIM - 0.1)}) 0%,rgba(3,20,45,${Math.min(1, SPLASH_DIM + 0.25)}) 100%)}
+    @keyframes iemsSplashZoom{to{transform:scale(1)}}
     #iems-splash .iems-splash-logo{display:flex;align-items:center;justify-content:center;
       animation:iemsSplashPop .55s cubic-bezier(.34,1.56,.64,1) both;}
     #iems-splash .iems-splash-logo img{width:auto;height:54px;max-width:220px;object-fit:contain;filter:drop-shadow(0 12px 26px rgba(0,0,0,.35))}
@@ -48,10 +65,25 @@
   el.addEventListener('click', () => el.remove());
   // Both handlers below used to fire in some load orders, appending the splash
   // twice (the second copy never animated out and covered the whole page).
-  const mount = () => { if (!el.isConnected) document.body.appendChild(el); };
-  if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', mount, { once: true });
-  else mount();
-  setTimeout(() => { if (el.isConnected) el.remove(); }, 2500);
+  const mount = () => {
+    if (el.isConnected) return;
+    document.body.appendChild(el);
+    // removal is timed from the moment the splash actually appears
+    setTimeout(() => { if (el.isConnected) el.remove(); }, 2500);
+  };
+  const mountWhenReady = () => {
+    if (!SPLASH_IMAGE) return mount();
+    // Give the picture up to 700ms to load (it is normally already cached from
+    // the login page); after that show the splash anyway on the gradient.
+    let done = false;
+    const go = () => { if (done) return; done = true; mount(); };
+    const img = new Image();
+    img.onload = go; img.onerror = go;
+    img.src = SPLASH_IMAGE;
+    setTimeout(go, 700);
+  };
+  if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', mountWhenReady, { once: true });
+  else mountWhenReady();
 })();
 
 (() => {

@@ -132,8 +132,8 @@ function apiUpload(path,bodyStr,onUpload){
     xhr.send(bodyStr);
   });
 }
-const progress={
-  el:$('import-progress'),fill:$('import-progress-fill'),pct:$('import-progress-pct'),label:$('import-progress-label'),
+function makeProgress(elId,fillId,pctId,labelId){return {
+  el:$(elId),fill:$(fillId),pct:$(pctId),label:$(labelId),
   timer:null,hideTimer:null,
   show(){clearTimeout(this.hideTimer);this.el.classList.remove('done','error');this.el.hidden=false;this.set(0,'جارٍ التجهيز...')},
   set(v,text){
@@ -148,7 +148,8 @@ const progress={
     if(ok)this.set(1,text);else this.label.textContent=text;
     if(ok)this.hideTimer=setTimeout(()=>{this.el.hidden=true},4000);
   }
-};
+};}
+const progress=makeProgress('import-progress','import-progress-fill','import-progress-pct','import-progress-label');
 
 $('master-upload-btn').onclick=async()=>{
   const status=$('master-upload-status');
@@ -225,3 +226,113 @@ $('master-upload-btn').onclick=async()=>{
     btn.disabled=!selectedFiles.length;
   }
 };
+
+// ---- Bulk password upload (system creator only) -----------------------------
+// Reads an XLSX/CSV in the browser (columns: ID + الباسورد), then sends the
+// accounts to /api/admin/import-passwords in small batches so each request
+// stays fast (passwords are bcrypt-hashed server-side). Passwords only ever
+// live in memory here and are dropped right after the upload.
+(function(){
+  const panel=$('pw-import-panel');
+  if(!panel||user.role!=='system_creator')return;
+  panel.hidden=false;
+
+  const input=$('pw-file'),sel=$('pw-selected'),btn=$('pw-upload-btn'),status=$('pw-upload-status'),result=$('pw-result'),zone=$('pw-dropzone');
+  const pgs=makeProgress('pw-progress','pw-progress-fill','pw-progress-pct','pw-progress-label');
+  const BATCH=25;
+  let parsed=null;
+
+  const ID_HEAD=/^\s*(id|الكود|كود|رقم الموظف|رقم)\s*$/i;
+  const PW_HEAD=/(الباسورد|باسورد|كلمة المرور|كلمه المرور|password|pass)/i;
+
+  function setStatus(text,cls){status.className='upload-status'+(cls?' '+cls:'');status.textContent=text||''}
+  function clearAll(){parsed=null;sel.style.display='none';sel.innerHTML='';btn.disabled=true;result.hidden=true;result.innerHTML='';pgs.el.hidden=true;setStatus('')}
+
+  async function readFile(f){
+    const XLSX=await ensureXLSX();
+    const buf=await f.arrayBuffer();
+    const wb=XLSX.read(buf,{type:'array'});
+    const ws=wb.Sheets[wb.SheetNames[0]];
+    const aoa=XLSX.utils.sheet_to_json(ws,{header:1,raw:true,defval:''});
+    let hRow=-1,idCol=-1,pwCol=-1;
+    for(let r=0;r<Math.min(aoa.length,15)&&hRow<0;r++){
+      const row=aoa[r]||[];let ic=-1,pc=-1;
+      row.forEach((v,c)=>{const t=String(v??'').trim();if(ic<0&&ID_HEAD.test(t))ic=c;else if(pc<0&&PW_HEAD.test(t))pc=c});
+      if(ic>=0&&pc>=0){hRow=r;idCol=ic;pwCol=pc}
+    }
+    if(hRow<0)throw new Error('لم أجد عمودَي ID والباسورد في أول شيت. تأكد من وجود عناوين الأعمدة (ID / الباسورد).');
+    const rows=[],skipped=[];
+    for(let r=hRow+1;r<aoa.length;r++){
+      const row=aoa[r]||[];
+      const rawId=row[idCol],rawPw=row[pwCol];
+      if((rawId===''||rawId==null)&&(rawPw===''||rawPw==null))continue; // empty line
+      const id=Number(String(rawId).trim());
+      const password=(typeof rawPw==='number'?String(rawPw):String(rawPw??'')).trim();
+      if(!Number.isInteger(id)||id<=0){skipped.push({line:r+1,reason:'ID غير صالح'+(id===0?' (0)':'')});continue}
+      if(password.length<4){skipped.push({line:r+1,reason:'باسورد ناقص'});continue}
+      rows.push({id,password});
+    }
+    return {rows,skipped,fileName:f.name};
+  }
+
+  async function pick(f){
+    if(!f)return;
+    clearAll();
+    if(!/\.(xlsx|csv)$/i.test(f.name)){setStatus('الملف لازم يكون XLSX أو CSV.','error');return}
+    if(f.size>8*1024*1024){setStatus('حجم الملف أكبر من 8 ميغابايت.','error');return}
+    try{
+      setStatus('جارٍ قراءة الملف...');
+      parsed=await readFile(f);
+      setStatus('');
+      sel.style.display='block';
+      sel.innerHTML=`<div class="selected-file-row"><span class="selected-file-name">${esc(parsed.fileName)}</span><span class="selected-file-size">${parsed.rows.length} جاهز · ${parsed.skipped.length} سيتم تخطيه</span><button type="button" class="selected-file-remove" title="إزالة الملف" aria-label="إزالة الملف">×</button></div>`;
+      sel.querySelector('.selected-file-remove').onclick=clearAll;
+      btn.disabled=!parsed.rows.length;
+      if(!parsed.rows.length)setStatus('لا توجد صفوف صالحة للرفع.','error');
+    }catch(e){parsed=null;setStatus(e.message||'تعذّر قراءة الملف.','error')}
+  }
+
+  input.onchange=()=>{pick(input.files[0]);input.value=''};
+  ;['dragenter','dragover'].forEach(evt=>zone.addEventListener(evt,e=>{e.preventDefault();e.stopPropagation();zone.classList.add('drag-over')}));
+  ;['dragleave','drop'].forEach(evt=>zone.addEventListener(evt,e=>{e.preventDefault();e.stopPropagation();zone.classList.remove('drag-over')}));
+  zone.addEventListener('drop',e=>{const f=e.dataTransfer&&e.dataTransfer.files&&e.dataTransfer.files[0];if(f)pick(f)});
+
+  function line(cls,label,value){return `<div class="pw-line ${cls}"><span>${label}</span><b>${value}</b></div>`}
+
+  btn.onclick=async()=>{
+    if(!parsed||!parsed.rows.length)return;
+    const total=parsed.rows.length;
+    if(!confirm(`سيتم تغيير كلمة مرور ${total} موظف. هل تريد المتابعة؟`))return;
+
+    btn.disabled=true;result.hidden=true;setStatus('');
+    pgs.show();
+    const agg={updated:0,notFound:[],invalid:0,protected:0,failedRows:0};
+    const batches=[];for(let i=0;i<total;i+=BATCH)batches.push(parsed.rows.slice(i,i+BATCH));
+    let lastError='';
+    try{
+      for(let b=0;b<batches.length;b++){
+        pgs.set(b/batches.length,`جارٍ رفع كلمات المرور (${b+1} من ${batches.length})...`);
+        try{
+          const data=await apiUpload('/api/admin/import-passwords',JSON.stringify({rows:batches[b]}),null);
+          agg.updated+=data.updated||0;
+          agg.notFound.push(...(data.notFound||[]));
+          agg.invalid+=(data.invalid||[]).length;
+          agg.protected+=(data.protected||[]).length;
+        }catch(e){agg.failedRows+=batches[b].length;lastError=e.message||'خطأ غير معروف'}
+        pgs.set((b+1)/batches.length);
+      }
+      const ok=agg.failedRows===0;
+      pgs.finish(ok,ok?'اكتمل رفع كلمات المرور':(agg.updated?'اكتمل جزئياً':'فشل الرفع'));
+      let html=line('pw-ok','تم تحديث كلمة المرور',agg.updated.toLocaleString('en-US'));
+      if(parsed.skipped.length)html+=line('','صفوف تم تخطيها في الملف (ID=0 أو باسورد ناقص)',parsed.skipped.length.toLocaleString('en-US'));
+      if(agg.notFound.length){html+=line('pw-warn','ID غير موجود في النظام',agg.notFound.length.toLocaleString('en-US'));html+=`<div class="pw-ids">${agg.notFound.map(n=>esc(n)).join(', ')}</div>`}
+      if(agg.protected)html+=line('','حسابات محمية (لا تُغيَّر من هنا)',agg.protected);
+      if(agg.invalid)html+=line('pw-warn','صفوف رفضها السيرفر',agg.invalid);
+      if(agg.failedRows)html+=line('pw-warn','صفوف فشل رفعها',agg.failedRows.toLocaleString('en-US'))+`<div class="pw-ids">${esc(lastError)}</div>`;
+      result.innerHTML=html;result.hidden=false;
+      setStatus(ok?'تم.':'حدثت أخطاء أثناء الرفع.',ok?'success':'error');
+    }finally{
+      parsed=null;sel.style.display='none';sel.innerHTML='';btn.disabled=true;
+    }
+  };
+})();

@@ -852,6 +852,51 @@ router.post('/employee/:id/reset-default', requireAuth, requireSystemCreator, as
   res.json({ ok: true, message: 'تم إعادة كلمة المرور إلى الافتراضية.', password: DEFAULT_PASSWORD });
 });
 
+// Bulk password import: [{ id, password }, ...] -> sets each employee's password
+// in one call. The admin UI sends this in small batches (bcrypt is CPU-heavy, so
+// one request per ~25 accounts keeps every call far below the function timeout).
+// Passwords are never written to the audit log - only counts and IDs.
+router.post('/import-passwords', requireAuth, requireSystemCreator, async (req, res) => {
+  const rows = Array.isArray(req.body?.rows) ? req.body.rows : null;
+  if (!rows || !rows.length) return res.status(400).json({ error: 'لا توجد بيانات لرفعها.' });
+  if (rows.length > 100) return res.status(400).json({ error: 'الحد الأقصى 100 حساب في الطلب الواحد.' });
+
+  const primaryAdminId = await getPrimaryAdminId();
+  const updated = [], notFound = [], invalid = [], protectedIds = [];
+  const seen = new Set();
+
+  for (const r of rows) {
+    const id = Number(r?.id);
+    const password = typeof r?.password === 'string' ? r.password.trim() : '';
+    if (!Number.isInteger(id) || id <= 0) { invalid.push({ id: r?.id ?? null, reason: 'ID غير صالح' }); continue; }
+    if (password.length < 4) { invalid.push({ id, reason: 'الباسورد أقل من 4 أحرف' }); continue; }
+    if (seen.has(id)) { invalid.push({ id, reason: 'ID مكرر في الملف' }); continue; }
+    seen.add(id);
+    if (id === primaryAdminId) { protectedIds.push(id); continue; }
+
+    const emp = await db.prepare('SELECT id FROM employees WHERE id = ?').get(id);
+    if (!emp) { notFound.push(id); continue; }
+
+    const hash = bcrypt.hashSync(password, 10);
+    await db.prepare('UPDATE employees SET password_hash = ?, must_change_password = FALSE WHERE id = ?').run(hash, id);
+    updated.push(id);
+  }
+
+  await writeAudit(req, 'bulk_import_passwords', 'employee', null, {
+    updated: updated.length, not_found: notFound.length, invalid: invalid.length, protected: protectedIds.length,
+    updated_ids: updated
+  });
+
+  res.json({
+    ok: true,
+    updated: updated.length,
+    notFound,
+    invalid,
+    protected: protectedIds,
+    message: `تم تحديث ${updated.length} كلمة مرور.`
+  });
+});
+
 // Update an employee's ID and/or name. Changing the ID is done inside a
 // transaction with foreign-key checks briefly relaxed so related rows
 // (summary, daily records, login audit) move over atomically.
