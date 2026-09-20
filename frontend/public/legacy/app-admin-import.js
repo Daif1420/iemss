@@ -103,6 +103,53 @@ async function loadImportHistory(){
 }
 loadImportHistory();
 
+
+// ---- Upload progress bar -------------------------------------------------
+// fetch() cannot report upload progress, so the import request goes through
+// XMLHttpRequest. The server only answers once it has finished processing the
+// workbook (no streaming), so the bar is: real bytes-sent progress while
+// uploading, then a slow "processing" creep that jumps to 100% on the response.
+function apiUpload(path,bodyStr,onUpload){
+  return new Promise((resolve,reject)=>{
+    const xhr=new XMLHttpRequest();
+    xhr.open('POST',path);
+    const h=authHeaders();
+    Object.keys(h).forEach(k=>xhr.setRequestHeader(k,h[k]));
+    xhr.responseType='text';
+    if(xhr.upload&&onUpload){
+      xhr.upload.onprogress=e=>{if(e.lengthComputable)onUpload(e.loaded/e.total)};
+      xhr.upload.onload=()=>onUpload(1);
+    }
+    xhr.onerror=()=>reject(new Error('تعذّر الاتصال بالخادم.'));
+    xhr.ontimeout=()=>reject(new Error('انتهت مهلة الطلب.'));
+    xhr.onload=()=>{
+      if(xhr.status===401){sessionStorage.clear();location.href='/index.html';reject(new Error('انتهت الجلسة'));return}
+      let data={};
+      try{data=JSON.parse(xhr.responseText||'{}')}catch(_){}
+      if(xhr.status<200||xhr.status>=300){reject(new Error(data.error||'حدث خطأ أثناء الاستيراد.'));return}
+      resolve(data);
+    };
+    xhr.send(bodyStr);
+  });
+}
+const progress={
+  el:$('import-progress'),fill:$('import-progress-fill'),pct:$('import-progress-pct'),label:$('import-progress-label'),
+  timer:null,hideTimer:null,
+  show(){clearTimeout(this.hideTimer);this.el.classList.remove('done','error');this.el.hidden=false;this.set(0,'جارٍ التجهيز...')},
+  set(v,text){
+    const p=Math.max(0,Math.min(100,Math.round(v*100)));
+    this.fill.style.width=p+'%';this.pct.textContent=p+'%';this.el.setAttribute('aria-valuenow',String(p));
+    if(text)this.label.textContent=text;
+  },
+  stopCreep(){clearInterval(this.timer);this.timer=null},
+  finish(ok,text){
+    this.stopCreep();
+    this.el.classList.add(ok?'done':'error');
+    if(ok)this.set(1,text);else this.label.textContent=text;
+    if(ok)this.hideTimer=setTimeout(()=>{this.el.hidden=true},4000);
+  }
+};
+
 $('master-upload-btn').onclick=async()=>{
   const status=$('master-upload-status');
   // The month selector was removed from this page and the /api/admin/import-master
@@ -115,6 +162,7 @@ $('master-upload-btn').onclick=async()=>{
   }
 
   const btn=$('master-upload-btn');btn.disabled=true;
+  progress.show();
   const queue=[...selectedFiles];
   const combined={updatedEmployees:[],createdEmployees:[],daily:0};
   const perFileResults=[];
@@ -127,8 +175,25 @@ $('master-upload-btn').onclick=async()=>{
       status.className='upload-status';
       status.textContent=`جارٍ تحديث البيانات: ملف ${i+1} من ${queue.length} (${f.name})...`;
       try{
+        // Each file owns an equal slice of the bar: read 0-10%, upload 10-60%,
+        // server processing 60-95% (creeps), response = 100% of the slice.
+        const n=queue.length,sliceStart=i/n,slice=1/n;
+        const tag=n>1?` (${i+1}/${n})`:'';
+        const setSlice=(frac,text)=>progress.set(sliceStart+frac*slice,text+tag);
+        progress.stopCreep();
+        setSlice(0.02,'جارٍ قراءة الملف'+(n>1?': '+f.name:''));
         const dataUrl=await readAsDataUrl(f);
-        const data=await api('/api/admin/import-master',{method:'POST',body:JSON.stringify({filename:f.name,data:String(dataUrl),merge:queue.length>1})});
+        setSlice(0.10,'جارٍ رفع الملف'+(n>1?': '+f.name:''));
+        const bodyStr=JSON.stringify({filename:f.name,data:String(dataUrl),merge:queue.length>1});
+        let proc=0;
+        const data=await apiUpload('/api/admin/import-master',bodyStr,r=>{
+          setSlice(0.10+0.50*r,r<1?'جارٍ رفع الملف'+(n>1?': '+f.name:''):'جارٍ معالجة البيانات...');
+          if(r>=1&&!progress.timer){
+            progress.timer=setInterval(()=>{proc+=(1-proc)*0.06;setSlice(0.60+0.35*proc,'جارٍ معالجة البيانات...')},300);
+          }
+        });
+        progress.stopCreep();
+        setSlice(1,'تم الانتهاء من الملف');
         combined.updatedEmployees.push(...(data.updatedEmployees||[]));
         combined.createdEmployees.push(...(data.createdEmployees||[]));
         combined.daily+=data.daily||0;
@@ -153,6 +218,8 @@ $('master-upload-btn').onclick=async()=>{
       status.textContent=`تعذّر تحديث أي ملف. ${failed.map(r=>`${r.fileName}: ${r.message}`).join('، ')}`;
     }
 
+    if(!failed.length)progress.finish(true,queue.length>1?'اكتمل استيراد كل الملفات':'اكتمل الاستيراد');
+    else progress.finish(false,succeeded.length?'اكتمل الاستيراد جزئياً':'فشل الاستيراد');
     selectedFiles=[];file.value='';renderSelectedFiles(); btn.disabled=true;
   }finally{
     btn.disabled=!selectedFiles.length;

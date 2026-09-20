@@ -8,7 +8,11 @@
   style.id = 'iems-login-style';
   style.dataset.iemsPageStyle = 'login';
   style.textContent = `
-    .visual-side{background:linear-gradient(145deg,#031b36 0%,#075baa 44%,#00a3d9 100%)!important}
+    .visual-side{background:#033A70 url('/login-bg.jpg') 22% center/cover no-repeat!important}
+    .visual-side:before{inset:0!important;filter:none!important;animation:none!important;background:linear-gradient(180deg,rgba(4,75,140,.10) 0%,rgba(4,60,115,.10) 45%,rgba(3,40,85,.55) 100%),linear-gradient(160deg,rgba(6,91,171,.18),rgba(3,58,112,.10))!important}
+    .visual-side:after,.visual-side .network,.visual-side .node,.visual-side .connection{display:none!important}
+    .glass:after{display:none!important}
+    .visual-side .visual-content{z-index:1}
     .visual-side:after{content:"";position:absolute;inset:0;opacity:.22;background-image:linear-gradient(rgba(255,255,255,.08) 1px,transparent 1px),linear-gradient(90deg,rgba(255,255,255,.08) 1px,transparent 1px);background-size:34px 34px;mask-image:radial-gradient(circle at 55% 45%,black,transparent 76%)}
     .visual-side .node.n1{width:190px;height:190px;top:8%;right:8%;border-radius:38px;transform:rotate(12deg)}
     .visual-side .node.n1:before{content:"✓";position:absolute;inset:24%;display:grid;place-items:center;border:2px solid rgba(255,255,255,.55);border-radius:50%;font-size:38px;color:#fff;font-weight:900;z-index:2}
@@ -18,7 +22,8 @@
     .visual-side .node.n3:before{content:"ATTENDANCE";position:absolute;left:18px;right:18px;top:18px;padding:8px;border-bottom:1px solid rgba(255,255,255,.25);font-size:9px;letter-spacing:2px;color:#fff;z-index:2}
     .visual-side .node.n4{width:74px;height:74px;bottom:29%;left:24%;border-radius:50%}
     .glass{position:relative;z-index:3;background:rgba(255,255,255,.86)!important;box-shadow:0 26px 70px rgba(1,20,48,.25)!important;border-radius:22px!important;padding:30px!important}
-    html[data-theme="dark"] .visual-side{background:linear-gradient(145deg,#020611,#062d58 48%,#075a73)!important}
+    html[data-theme="dark"] .visual-side{background:#050b18 url('/login-bg.jpg') 22% center/cover no-repeat!important}
+    html[data-theme="dark"] .visual-side:before{background:linear-gradient(180deg,rgba(5,11,24,.40) 0%,rgba(5,11,24,.45) 45%,rgba(3,7,16,.80) 100%)!important}
     html[data-theme="dark"] .glass{background:rgba(14,20,30,.82)!important;box-shadow:0 26px 70px rgba(0,0,0,.4)!important}
     .brand-chip{border-radius:12px!important;background:rgba(255,255,255,.65)!important;padding:8px 12px!important}
   `;
