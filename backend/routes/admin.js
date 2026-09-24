@@ -446,19 +446,20 @@ router.post('/import-master', requireAuth, requireUploader, async (req, res) => 
         );
       }
 
-      // Match supervisor-target rows. In a multi-file import we merge blocks
-      // from all files instead of deleting the rows uploaded by the previous file.
+      // Match supervisor-target rows. We always merge blocks across files
+      // instead of deleting the month's existing rows first: whether the
+      // shift sheets (Shift A, Shift C, ...) are uploaded together in one
+      // batch or one at a time in separate uploads, each file's rows must
+      // only add/update its own (section, supervisor_name, entry_date)
+      // records, never wipe out rows a previous, separate upload already
+      // stored for this month. The upsert below (ON CONFLICT ... DO UPDATE)
+      // already handles corrections to a single row, so no blanket DELETE
+      // is needed here.
       let supervisorLinked = 0;
       let supervisorUnmatched = 0;
       const allEmployeesNow = await db.prepare("SELECT id, name FROM employees WHERE role = 'employee'").all();
       const nameIndex = new Map();
       for (const e of allEmployeesNow) nameIndex.set(normalizeArabicName(e.name), e.id);
-      if (!merge) {
-        const cycleEnd = new Date(`${monthStart}T00:00:00Z`);
-        cycleEnd.setUTCMonth(cycleEnd.getUTCMonth() + 1);
-        cycleEnd.setUTCDate(cycleEnd.getUTCDate() - 1);
-        await db.query('DELETE FROM supervisor_targets WHERE entry_date BETWEEN $1::date AND $2::date', [monthStart, cycleEnd.toISOString().slice(0, 10)]);
-      }
 
       const supervisorRecs = parsed.supervisorTargets || [];
       const tEmp = [], tName = [], tSection = [], tDate = [], tDaily = [], tMonthly = [], tMetrics = [];

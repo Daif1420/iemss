@@ -944,8 +944,9 @@ async function init(){const m=await api('/api/attendance/meta');dates=m.dates||[
   // do not silently force today's date or a 7-day window.
   $('att-from').value=first; $('att-to').value=last;
   // Every uploaded month is kept, so "all data" would add all months together.
-  // Employees start on the latest payroll cycle only (they can still widen it).
-  if(user.role==='employee'){const c=iemsCycle(last);$('att-from').value=c.start<first?first:c.start;$('att-to').value=c.end>last?last:c.end}
+  // Default to the latest payroll cycle only (last uploaded cycle) for
+  // everyone, admin included — they can still widen the range manually.
+  {const c=iemsCycle(last);$('att-from').value=c.start<first?first:c.start;$('att-to').value=c.end>last?last:c.end}
 }}
 const values=id=>{const el=$(id);if(!el)return[];if(el.multiple)return [...el.selectedOptions].map(o=>o.value).filter(v=>v&&v!=='__ALL__');const v=el.value;return v&&v!=='__ALL__'?[v]:[]};
 const params=()=>{const p=new URLSearchParams();[['from','att-from'],['to','att-to']].forEach(([k,id])=>{const v=$(id)?.value;if(v)p.set(k,v)});[['company','att-company'],['department','att-department'],['shift','att-shift'],['status','att-status']].forEach(([k,id])=>values(id).forEach(v=>p.append(k,v)));const q=$('att-search')?.value?.trim();if(q)p.set('search',q);return p};
