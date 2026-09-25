@@ -1,9 +1,10 @@
 const express = require('express');
 const bcrypt = require('bcryptjs');
 const db = require('../database/init');
-const { requireAuth, requireAdmin, requireSupervisor, requireUploader, requireSystemCreator, isCreator } = require('../middleware/auth');
+const { requireAuth, requireAdmin, requireSupervisor, requireUploader, requireSystemCreator, requirePermission, isCreator } = require('../middleware/auth');
 const { parseMasterWorkbook } = require('../utils/master-import');
 const { computeTop5ByStage } = require('./employee');
+const { PERMISSION_CATALOG, loadPermissions, savePermissions } = require('../utils/permissions');
 
 const router = express.Router();
 function parseList(v){const a=Array.isArray(v)?v:String(v??'').split(',');return [...new Set(a.flatMap(x=>String(x).split(',')).map(x=>x.trim()).filter(x=>x&&x!=='__ALL__'))];}
@@ -54,7 +55,7 @@ function matchSupervisorName(rawName, nameIndex, allEmployees) {
   return candidates.length === 1 ? candidates[0].id : null;
 }
 
-router.post('/import-master', requireAuth, requireUploader, async (req, res) => {
+router.post('/import-master', requireAuth, requirePermission('import_data'), async (req, res) => {
   try {
     const { filename, data, merge } = req.body || {};
     if (!data) return res.status(400).json({ error: 'من فضلك اختر ملف Excel.' });
@@ -577,7 +578,7 @@ router.post('/import-master', requireAuth, requireUploader, async (req, res) => 
 });
 
 // Durable import history. Available to full admins and supervisors who can import.
-router.get('/import-history', requireAuth, requireSupervisor, async (req, res) => {
+router.get('/import-history', requireAuth, requirePermission('import_data'), async (req, res) => {
   const rows = await db.prepare(`
     SELECT id, imported_by, imported_by_name, filename, month_start, updated_count, created_count, daily_count, skipped_count,
            supervisor_linked, supervisor_unmatched, status, details_json, created_at
@@ -675,7 +676,7 @@ router.post('/employee/:id/reset-password', requireAuth, requireSystemCreator, a
 // Full employee list for the admin "Employees" management page.
 // Includes every account (regular employees + supervisor accounts + full admins)
 // so the full-control admin can see and change everyone's permission level.
-router.get('/employees', requireAuth, requireSupervisor, async (req, res) => {
+router.get('/employees', requireAuth, requirePermission('view_employees'), async (req, res) => {
   const scoped = req.user.role === 'supervisor';
   const rows = (await db.prepare(`
     SELECT id, emp_num, name, education, residence, company, shift, department, role, must_change_password, status, left_date, departure_reason, created_at, supervisor_shifts
@@ -766,7 +767,7 @@ router.patch('/employee/:id/role', requireAuth, requireSystemCreator, async (req
 });
 
 // Company-wide overview stats for the admin dashboard
-router.get('/overview', requireAuth, requireAdmin, async (req, res) => {
+router.get('/overview', requireAuth, requirePermission('manual_entry'), async (req, res) => {
   const shift = req.query.shift && req.query.shift !== '__ALL__' ? String(req.query.shift) : null;
   const from = req.query.from ? String(req.query.from) : null;
   const to = req.query.to ? String(req.query.to) : null;
@@ -967,17 +968,17 @@ router.patch('/employee/:id', requireAuth, requireSystemCreator, async (req, res
 const DEPARTURE_REASONS=['استقالة','كثرة الغياب عن العمل','ضعف الأداء / عدم تحقيق التارجت','مخالفة لوائح العمل','مخالفة إدارية / سلوكية','ترك العمل بدون إخطار','خدمة الوطن (الجيش)'];
 function normalizeDepartureReason(value){ return String(value ?? '').replace(/\s+/g,' ').trim(); }
 function isValidDepartureDate(value){ const d=String(value ?? '').trim(); if(!/^\d{4}-\d{2}-\d{2}$/.test(d)) return false; const [y,m,day]=d.split('-').map(Number); const dt=new Date(Date.UTC(y,m-1,day)); return dt.getUTCFullYear()===y && dt.getUTCMonth()===m-1 && dt.getUTCDate()===day; }
-router.get('/employee/:id/departure',requireAuth,requireSupervisor,async(req,res)=>{const id=Number(req.params.id);const emp=await db.prepare("SELECT id,role,shift,left_date,departure_reason,status FROM employees WHERE id=?").get(id);if(!emp||emp.role!=='employee')return res.status(404).json({error:'الموظف غير موجود.'});if(req.user.role==='supervisor'){const allowed=Array.isArray(req.user.supervisorShifts)&&req.user.supervisorShifts.length?req.user.supervisorShifts:[req.user.shift||''];if(!allowed.includes(String(emp.shift||'')))return res.status(403).json({error:'لا يمكنك الوصول إلى موظف خارج الشيفتات المسندة إليك.'});}res.json({departure:{leftDate:emp.left_date?String(emp.left_date).slice(0,10):'',reason:emp.departure_reason||'',status:emp.status||'active'}})});
-router.patch('/employee/:id/departure',requireAuth,requireSupervisor,async(req,res)=>{const id=Number(req.params.id);const emp=await db.prepare("SELECT id,role,shift FROM employees WHERE id=?").get(id);if(!emp||emp.role!=='employee')return res.status(404).json({error:'الموظف غير موجود.'});if(req.user.role==='supervisor'){const allowed=Array.isArray(req.user.supervisorShifts)&&req.user.supervisorShifts.length?req.user.supervisorShifts:[req.user.shift||''];if(!allowed.includes(String(emp.shift||'')))return res.status(403).json({error:'لا يمكنك تسجيل مغادرة موظف خارج الشيفتات المسندة إليك.'});}const d=String(req.body?.leftDate||'').trim(),r=normalizeDepartureReason(req.body?.reason);const matchedReason=DEPARTURE_REASONS.find(x=>x===r);if(!isValidDepartureDate(d)||!matchedReason)return res.status(400).json({error:!isValidDepartureDate(d)?'تاريخ المغادرة غير صالح.': 'اختر سبب مغادرة صحيح.'});await db.prepare("UPDATE employees SET status='left',left_date=?,departure_reason=? WHERE id=?").run(d,matchedReason,id);await writeAudit(req,'mark_employee_left','employee',id,{left_date:d,departure_reason:matchedReason});res.json({ok:true,departure:{leftDate:d,reason:matchedReason}})});
+router.get('/employee/:id/departure',requireAuth,requirePermission('view_employees'),async(req,res)=>{const id=Number(req.params.id);const emp=await db.prepare("SELECT id,role,shift,left_date,departure_reason,status FROM employees WHERE id=?").get(id);if(!emp||emp.role!=='employee')return res.status(404).json({error:'الموظف غير موجود.'});if(req.user.role==='supervisor'){const allowed=Array.isArray(req.user.supervisorShifts)&&req.user.supervisorShifts.length?req.user.supervisorShifts:[req.user.shift||''];if(!allowed.includes(String(emp.shift||'')))return res.status(403).json({error:'لا يمكنك الوصول إلى موظف خارج الشيفتات المسندة إليك.'});}res.json({departure:{leftDate:emp.left_date?String(emp.left_date).slice(0,10):'',reason:emp.departure_reason||'',status:emp.status||'active'}})});
+router.patch('/employee/:id/departure',requireAuth,requirePermission('view_employees'),async(req,res)=>{const id=Number(req.params.id);const emp=await db.prepare("SELECT id,role,shift FROM employees WHERE id=?").get(id);if(!emp||emp.role!=='employee')return res.status(404).json({error:'الموظف غير موجود.'});if(req.user.role==='supervisor'){const allowed=Array.isArray(req.user.supervisorShifts)&&req.user.supervisorShifts.length?req.user.supervisorShifts:[req.user.shift||''];if(!allowed.includes(String(emp.shift||'')))return res.status(403).json({error:'لا يمكنك تسجيل مغادرة موظف خارج الشيفتات المسندة إليك.'});}const d=String(req.body?.leftDate||'').trim(),r=normalizeDepartureReason(req.body?.reason);const matchedReason=DEPARTURE_REASONS.find(x=>x===r);if(!isValidDepartureDate(d)||!matchedReason)return res.status(400).json({error:!isValidDepartureDate(d)?'تاريخ المغادرة غير صالح.': 'اختر سبب مغادرة صحيح.'});await db.prepare("UPDATE employees SET status='left',left_date=?,departure_reason=? WHERE id=?").run(d,matchedReason,id);await writeAudit(req,'mark_employee_left','employee',id,{left_date:d,departure_reason:matchedReason});res.json({ok:true,departure:{leftDate:d,reason:matchedReason}})});
 router.patch('/employee/:id/reactivate',requireAuth,requireSystemCreator,async(req,res)=>{const id=Number(req.params.id);await db.prepare("UPDATE employees SET status='active',left_date=NULL,departure_reason=NULL WHERE id=? AND role='employee'").run(id);await writeAudit(req,'reactivate_employee','employee',id,{});res.json({ok:true})});
-router.get('/employee-group/:group',requireAuth,requireSupervisor,async(req,res)=>{const g=String(req.params.group||'all');if(!['all','current','left','archive'].includes(g))return res.status(400).json({error:'تصنيف غير صالح.'});const sc=req.user.role==='supervisor', supervisorShifts=Array.isArray(req.user.supervisorShifts)&&req.user.supervisorShifts.length?req.user.supervisorShifts:[req.user.shift||''], ps=sc?supervisorShifts:[], sq=sc?` AND e.shift = ANY(?::text[])`:'';let st='';if(g==='current')st=" AND COALESCE(e.status,'active')='active'";if(g==='left')st=" AND e.status='left'";if(g==='archive')st=" AND e.status='archive'";const rows=await db.prepare(`SELECT id,emp_num,name,education,company,shift,department,status,left_date,departure_reason,created_at,supervisor_shifts FROM employees e WHERE e.role='employee'${sq}${st} ORDER BY name`).all(...ps);res.json({employees:rows,total:rows.length,group:g})});
+router.get('/employee-group/:group',requireAuth,requirePermission('view_employees'),async(req,res)=>{const g=String(req.params.group||'all');if(!['all','current','left','archive'].includes(g))return res.status(400).json({error:'تصنيف غير صالح.'});const sc=req.user.role==='supervisor', supervisorShifts=Array.isArray(req.user.supervisorShifts)&&req.user.supervisorShifts.length?req.user.supervisorShifts:[req.user.shift||''], ps=sc?supervisorShifts:[], sq=sc?` AND e.shift = ANY(?::text[])`:'';let st='';if(g==='current')st=" AND COALESCE(e.status,'active')='active'";if(g==='left')st=" AND e.status='left'";if(g==='archive')st=" AND e.status='archive'";const rows=await db.prepare(`SELECT id,emp_num,name,education,company,shift,department,status,left_date,departure_reason,created_at,supervisor_shifts FROM employees e WHERE e.role='employee'${sq}${st} ORDER BY name`).all(...ps);res.json({employees:rows,total:rows.length,group:g})});
 // ---- Manual entry (data-entry screen, alternative to uploading the Master Excel sheet) ----
 
 // Reference data for the manual-entry screen: known employees, stage names
 // already used in stage_daily, and supervisor sections already used in
 // supervisor_targets. Lets the UI offer dropdowns/autocomplete instead of
 // free typing everything.
-router.get('/manual/meta', requireAuth, requireAdmin, async (req, res) => {
+router.get('/manual/meta', requireAuth, requirePermission('manual_entry'), async (req, res) => {
   const employees = (await db.prepare("SELECT id, name, company, shift, department FROM employees WHERE role = 'employee' ORDER BY name").all());
   const stages = (await db.prepare("SELECT DISTINCT stage FROM stage_daily WHERE stage <> 'TOTAL TARGET %' ORDER BY stage").all()).map(r => r.stage);
   const sections = (await db.prepare('SELECT DISTINCT section FROM supervisor_targets ORDER BY section').all()).map(r => r.section);
@@ -988,7 +989,7 @@ router.get('/manual/meta', requireAuth, requireAdmin, async (req, res) => {
 // in the Master sheet's employee-info columns). If `id` matches an existing
 // employee it's updated; otherwise a new employee is created with the
 // default password (same behaviour as a fresh row in the Excel import).
-router.post('/manual/employee', requireAuth, requireAdmin, async (req, res) => {
+router.post('/manual/employee', requireAuth, requirePermission('manual_entry'), async (req, res) => {
   let { id, emp_num, name, education, residence, company, shift, department } = req.body || {};
   id = Number(id);
   if (!Number.isInteger(id) || id <= 0) return res.status(400).json({ error: 'رقم الموظف (ID) غير صالح.' });
@@ -1030,7 +1031,7 @@ const upsertDaily = db.prepare(`
     value_text = excluded.value_text
 `);
 
-router.post('/manual/daily', requireAuth, requireAdmin, async (req, res) => {
+router.post('/manual/daily', requireAuth, requirePermission('manual_entry'), async (req, res) => {
   const { employee_id, stage, entry_date, value } = req.body || {};
   const empId = Number(employee_id);
   if (!Number.isInteger(empId)) return res.status(400).json({ error: 'رقم موظف غير صالح.' });
@@ -1052,7 +1053,7 @@ router.post('/manual/daily', requireAuth, requireAdmin, async (req, res) => {
 
 // Batch version: fill a whole grid (several employees × several dates) for
 // one stage in a single request — used by the spreadsheet-style entry table.
-router.post('/manual/daily-batch', requireAuth, requireAdmin, async (req, res) => {
+router.post('/manual/daily-batch', requireAuth, requirePermission('manual_entry'), async (req, res) => {
   const { stage, entries } = req.body || {};
   if (!stage || !String(stage).trim()) return res.status(400).json({ error: 'اسم المرحلة (Stage) مطلوب.' });
   if (!Array.isArray(entries) || !entries.length) return res.status(400).json({ error: 'لا يوجد بيانات لحفظها.' });
@@ -1099,7 +1100,7 @@ router.post('/manual/daily-batch', requireAuth, requireAdmin, async (req, res) =
 
 // Upsert an employee's monthly summary (target/achievement/absence/leave/
 // overtime block — the "emp summary" sheet in the Master workbook).
-router.post('/manual/summary', requireAuth, requireAdmin, async (req, res) => {
+router.post('/manual/summary', requireAuth, requirePermission('manual_entry'), async (req, res) => {
   const b = req.body || {};
   const empId = Number(b.employee_id);
   if (!Number.isInteger(empId)) return res.status(400).json({ error: 'رقم موظف غير صالح.' });
@@ -1145,7 +1146,7 @@ router.post('/manual/summary', requireAuth, requireAdmin, async (req, res) => {
 });
 
 // Upsert a supervisor-target row (OPP A / OPP B / QC / File Trail sheets).
-router.post('/manual/supervisor-target', requireAuth, requireAdmin, async (req, res) => {
+router.post('/manual/supervisor-target', requireAuth, requirePermission('manual_entry'), async (req, res) => {
   const { employee_id, supervisor_name, section, entry_date, target_daily, target_monthly, metrics } = req.body || {};
   if (!supervisor_name || !String(supervisor_name).trim()) return res.status(400).json({ error: 'اسم المشرف مطلوب.' });
   if (!section || !String(section).trim()) return res.status(400).json({ error: 'القسم (Section) مطلوب.' });
@@ -1296,6 +1297,24 @@ router.delete('/banner', requireAuth, requireSystemCreator, async (req, res) => 
   await db.prepare(`DELETE FROM system_settings WHERE key = 'home_banner'`).run();
   await writeAudit(req, 'remove_banner', 'system_settings', 'home_banner', {});
   res.json({ ok: true, message: 'تم حذف صورة البانر.' });
+});
+
+// ---------------------------------------------------------------------------
+// Role permission matrix (admin / supervisor). System-creator only: this is
+// the control that decides what admins and supervisors can see and do
+// elsewhere in the app, so only the system creator may view or change it.
+// ---------------------------------------------------------------------------
+router.get('/permissions', requireAuth, requireSystemCreator, async (req, res) => {
+  const matrix = await loadPermissions({ force: true });
+  res.json({ catalog: PERMISSION_CATALOG, permissions: matrix });
+});
+
+router.put('/permissions', requireAuth, requireSystemCreator, async (req, res) => {
+  const body = req.body?.permissions;
+  if (!body || typeof body !== 'object') return res.status(400).json({ error: 'صيغة الصلاحيات غير صالحة.' });
+  const saved = await savePermissions(body, req.user.id);
+  await writeAudit(req, 'update_role_permissions', 'system_settings', 'role_permissions', saved);
+  res.json({ ok: true, message: 'تم حفظ الصلاحيات بنجاح.', permissions: saved });
 });
 
 module.exports = router;

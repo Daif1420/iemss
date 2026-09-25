@@ -3,6 +3,7 @@ const bcrypt = require('bcryptjs');
 const jwt = require('jsonwebtoken');
 const db = require('../database/init');
 const { requireAuth, JWT_SECRET } = require('../middleware/auth');
+const { permissionsForRole } = require('../utils/permissions');
 
 const router = express.Router();
 
@@ -89,6 +90,7 @@ router.post('/login', async (req, res) => {
       company: emp.company,
       department: emp.department,
       must_change_password: !!emp.must_change_password,
+      permissions: await permissionsForRole(emp.role),
     },
   });
 });
@@ -97,7 +99,7 @@ router.get('/me', requireAuth, async (req, res) => {
   const emp = await db.prepare('SELECT id, name, role, shift, supervisor_shifts, company, department FROM employees WHERE id = ?')
     .get(req.user.id);
   if (!emp) return res.status(404).json({ error: 'غير موجود' });
-  res.json({ user: emp });
+  res.json({ user: { ...emp, permissions: await permissionsForRole(emp.role) } });
 });
 
 module.exports = router;
