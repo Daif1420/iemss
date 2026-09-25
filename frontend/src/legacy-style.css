@@ -1120,3 +1120,98 @@ html[data-theme="dark"] .iems-credit-footer .credit-name{color:#4fa3e8}
 /* The name <td> carries .emp-name-cell (display:flex) which stops it behaving
    as a table cell: text floated up and the row background/border broke. */
 .emp-mgmt-table td.emp-name-cell{display:table-cell!important;vertical-align:middle}
+
+/* =====================================================================
+   UI/UX REFRESH v19 — shape, spacing, motion & typography pass only.
+   No color values are introduced or changed anywhere below; every rule
+   here references the existing var(--...) palette so both the light
+   and dark themes stay exactly as they were.
+   ===================================================================== */
+
+:root{
+  --radius:14px;
+  --radius-sm:10px;
+  --radius-lg:20px;
+  --ease:cubic-bezier(.22,.9,.32,1);
+  --shadow-soft:var(--shadow);
+  --shadow-lift:0 18px 40px -12px rgba(15,35,65,.16);
+}
+
+/* Typography rhythm: slightly airier, clearer hierarchy */
+body{line-height:1.55;-webkit-font-smoothing:antialiased;letter-spacing:.1px}
+.hero h1{font-weight:800;letter-spacing:-.3px}
+.eyebrow{letter-spacing:2.2px}
+.filter-head h2,.panel-head h2,.stage-name,.modal-card h3{letter-spacing:.1px}
+h1,h2,h3{font-weight:800}
+
+/* Global motion: smoother, consistent easing instead of default linear */
+button,input,select,.icon-btn,.ghost-btn,.logout-btn,.reset-btn,.row-icon-btn,
+.filters select,.filters input,.field input,.stat-card,.panel,.filters,
+.rank-row,.emp-mgmt-table tr,.modal-close,.apply-btn{
+  transition:background-color .2s var(--ease),border-color .2s var(--ease),
+    color .2s var(--ease),box-shadow .25s var(--ease),transform .25s var(--ease)!important;
+}
+
+/* Cards & panels: rounder corners, gentle lift on hover for a more tactile feel */
+.filters,.panel,.stat-card{border-radius:var(--radius-lg)!important}
+.stat-card{cursor:default}
+.stat-card:hover{transform:translateY(-3px);box-shadow:var(--shadow-lift)}
+.stage-card{border-radius:var(--radius-lg)!important}
+.info-item,.top5-panel .stage-card-head{border-radius:var(--radius-sm)!important}
+
+/* Buttons: clearer press/hover feedback, no new colors */
+.icon-btn,.row-icon-btn,.modal-close{border-radius:var(--radius-sm)!important}
+.icon-btn:hover,.row-icon-btn:hover{transform:translateY(-1px)}
+.apply-btn,.departure-modal .primary-btn{border-radius:var(--radius-sm)!important}
+.apply-btn:hover{transform:translateY(-1px);box-shadow:0 14px 26px rgba(6,91,171,.24)}
+.apply-btn:active,.departure-modal .primary-btn:active{transform:translateY(0)}
+.ghost-btn,.logout-btn,.reset-btn{border-radius:var(--radius-sm)!important}
+.modal-actions button{border-radius:var(--radius-sm)!important}
+.modal-actions button:hover{filter:brightness(1.06)}
+.modal-actions button:active{transform:scale(.98)}
+
+/* Inputs: airier, clearer focus ring using the existing primary color */
+.filters select,.filters input[type=date],.field input,.emp-search-row input{
+  border-radius:var(--radius-sm)!important;height:44px!important
+}
+.filters select:focus,.filters input:focus,.emp-search-row input:focus{
+  box-shadow:0 0 0 4px color-mix(in srgb,var(--primary) 14%,transparent)!important
+}
+
+/* Table: crisper spacing, subtle row-hover lift, sticky header for long lists */
+.emp-mgmt-table th{position:sticky;top:0;z-index:1}
+.emp-mgmt-table td,.emp-mgmt-table th{padding:13px 15px}
+.emp-mgmt-table tr:hover td{transform:translateZ(0)}
+.table-wrap,.report-table-wrap,.reports-page .table-wrap,.absence-table-wrap,
+.modern-table-wrap,.emp-table-panel{border-radius:var(--radius)!important}
+
+/* Modal: softer entrance, larger radius, roomier padding */
+.modal-card{border-radius:var(--radius-lg)!important;padding:26px!important}
+.modal-card-head{padding-bottom:12px;border-bottom:1px solid var(--line);margin-bottom:18px!important}
+
+/* Topbar & chips: a touch more breathing room */
+.topbar{padding-top:16px;padding-bottom:16px}
+.user-chip{border-radius:16px!important}
+.avatar{border-radius:12px!important}
+.live-pill{border-radius:32px!important}
+
+/* KPI / rank rows: consistent rounded language */
+.rank-badge{border-radius:10px!important}
+.stat-icon{border-radius:14px!important}
+
+/* Scrollbar polish (Webkit) — neutral, theme-aware, no new hues */
+.table-wrap::-webkit-scrollbar,.report-table-wrap::-webkit-scrollbar{height:8px;width:8px}
+.table-wrap::-webkit-scrollbar-thumb,.report-table-wrap::-webkit-scrollbar-thumb{
+  background:var(--line);border-radius:8px
+}
+.table-wrap::-webkit-scrollbar-thumb:hover,.report-table-wrap::-webkit-scrollbar-thumb:hover{
+  background:var(--muted)
+}
+
+/* Slightly refined responsive spacing on small screens */
+@media(max-width:760px){
+  .container{padding-top:20px}
+  .filters,.panel{padding:16px!important}
+  .stat-card{padding:15px!important}
+  .modal-card{padding:20px!important}
+}
