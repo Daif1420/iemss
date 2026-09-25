@@ -177,6 +177,7 @@ if ($('filter-role')) $('filter-role').innerHTML = `<option value="__ALL__">ال
 function roleOptionsHtml(current) {
   const allowed = Object.keys(ROLE_LABELS).filter(val => {
     if (isCreator) return true;
+    if (isAdmin) return ['admin', 'supervisor', 'employee'].includes(val);
     return ['supervisor', 'employee'].includes(val);
   });
   // Keep a protected account's real role visible even when the select is
@@ -206,7 +207,7 @@ function renderTable(list) {
       <td>${escapeHtml(e.shift || '—')}</td>
       <td>${escapeHtml(e.department || '—')}</td>
       <td>${escapeHtml(e.education || '—')}</td>
-      <td>${isCreator ? `<select class="role-select role-${escapeHtml(e.role || 'employee')}" data-role-for="${escapeHtml(e.id)}" ${(String(e.id) === String(user.id) || e.is_primary_admin) ? 'disabled' : ''}>${roleOptionsHtml(e.role || 'employee')}</select>` : `<span class="role-readonly">${escapeHtml((ROLE_LABELS[e.role || 'employee'] || 'موظف') + (e.role === 'supervisor' ? supervisorShiftLabel(e) : ''))}</span>`}${e.is_primary_admin ? '<span class="primary-admin-badge">🔒</span>' : ''}</td>
+      <td>${(isCreator || (isAdmin && e.role !== 'system_creator')) ? `<select class="role-select role-${escapeHtml(e.role || 'employee')}" data-role-for="${escapeHtml(e.id)}" ${(String(e.id) === String(user.id) || e.is_primary_admin) ? 'disabled' : ''}>${roleOptionsHtml(e.role || 'employee')}</select>` : `<span class="role-readonly">${escapeHtml((ROLE_LABELS[e.role || 'employee'] || 'موظف') + (e.role === 'supervisor' ? supervisorShiftLabel(e) : ''))}</span>`}${e.is_primary_admin ? '<span class="primary-admin-badge">🔒</span>' : ''}</td>
       <td>${statusBadgeHtml(e.status)}</td>
       <td class="emp-actions-cell">
         <button class="row-icon-btn info-btn" data-action="view" title="عرض بيانات الموظف كما تظهر له">${miniIcon('view')}</button>

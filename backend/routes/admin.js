@@ -717,7 +717,7 @@ async function getPrimaryAdminId() {
   return row ? row.id : null;
 }
 
-router.patch('/employee/:id/role', requireAuth, requireSystemCreator, async (req, res) => {
+router.patch('/employee/:id/role', requireAuth, requireAdmin, async (req, res) => {
   const targetId = Number(req.params.id);
   if (!Number.isInteger(targetId)) return res.status(400).json({ error: 'رقم موظف غير صالح.' });
 
@@ -740,10 +740,12 @@ router.patch('/employee/:id/role', requireAuth, requireSystemCreator, async (req
   if (req.user.role === 'supervisor' && (role === 'admin' || role === 'system_creator' || target.role === 'admin' || target.role === 'system_creator')) {
     return res.status(403).json({ error: 'المشرف لا يمكنه تعديل صلاحيات الإدارة.' });
   }
-  // Manager: may manage employee/supervisor accounts, but cannot grant creator,
-  // create another admin, or modify an existing admin/creator.
-  if (req.user.role === 'admin' && (role === 'system_creator' || role === 'admin' || target.role === 'admin' || target.role === 'system_creator')) {
-    return res.status(403).json({ error: 'مدير النظام لا يمكنه تعديل صلاحية منشئ النظام أو صلاحيات مدير النظام.' });
+  // Manager (admin): may grant admin (full control, same as themself),
+  // supervisor, or employee to any account, but can never touch the
+  // system_creator account or grant the system_creator role — that stays
+  // exclusive to the creator.
+  if (req.user.role === 'admin' && (role === 'system_creator' || target.role === 'system_creator')) {
+    return res.status(403).json({ error: 'مدير النظام لا يمكنه تعديل صلاحية منشئ النظام أو منحها.' });
   }
   // There is one system-creator account. It is the highest permission level.
   if (role === 'system_creator') {
