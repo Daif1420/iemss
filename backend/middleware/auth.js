@@ -1,5 +1,4 @@
 const jwt = require('jsonwebtoken');
-const { hasPermission } = require('../utils/permissions');
 
 const JWT_SECRET = process.env.JWT_SECRET || '';
 
@@ -47,31 +46,7 @@ function requireSupervisor(req, res, next) {
 function requireAdminOrSupervisor(req, res, next) { return requireSupervisor(req, res, next); }
 const requireUploader = requireSupervisor;
 
-// Customizable-permission gate. system_creator always passes. For 'admin'
-// and 'supervisor' this checks the editable matrix in utils/permissions.js
-// (managed on the Permissions page); other roles are always denied. Falls
-// back to requireSupervisor's error message so existing UI error handling
-// keeps working unchanged.
-function requirePermission(key) {
-  return async function (req, res, next) {
-    if (!requireJwtSecret(res)) return;
-    if (isCreator(req)) return next();
-    const role = req.user?.role;
-    if (role !== 'admin' && role !== 'supervisor') {
-      return res.status(403).json({ error: 'هذا الإجراء متاح لمدير النظام أو المشرف فقط.' });
-    }
-    try {
-      const allowed = await hasPermission(role, key);
-      if (!allowed) return res.status(403).json({ error: 'ليس لديك صلاحية لتنفيذ هذا الإجراء. تواصل مع منشئ النظام.' });
-      return next();
-    } catch (err) {
-      return res.status(500).json({ error: 'تعذّر التحقق من الصلاحيات.' });
-    }
-  };
-}
-
 module.exports = {
   requireAuth, requireAdmin, requireSupervisor, requireAdminOrSupervisor,
-  requireUploader, requireSystemCreator, requirePermission,
-  isCreator, isAdmin, isSupervisor, JWT_SECRET
+  requireUploader, requireSystemCreator, isCreator, isAdmin, isSupervisor, JWT_SECRET
 };

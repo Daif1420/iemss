@@ -155,46 +155,19 @@
   const ADMIN_UP = CREATOR || role === 'admin';
   const SUPERVISOR_UP = ADMIN_UP || role === 'supervisor';
 
-  // Customizable permissions come from the server (set on /permissions.html by
-  // the system creator) and are attached to the logged-in user at login/me
-  // time. If they're missing for any reason (old cached session, network
-  // hiccup) we fall back to the previous fixed role behaviour so nothing
-  // breaks — the backend route guards are the real source of truth anyway.
-  const perms = user?.permissions || null;
-  const perm = (key, fallback) => perms ? !!perms[key] : fallback;
-
   const NAV_ACCESS = {
     'nav-home': !!role && role !== 'employee',
-    'nav-employees': CREATOR || perm('view_employees', SUPERVISOR_UP),
-    'nav-import': CREATOR || perm('import_data', SUPERVISOR_UP),
-    'nav-reports': CREATOR || perm('view_reports', SUPERVISOR_UP),
-    'nav-manual-entry': CREATOR || perm('manual_entry', ADMIN_UP),
+    'nav-employees': SUPERVISOR_UP,   // page: supervisor+ · API: requireSupervisor
+    'nav-import': SUPERVISOR_UP,      // page: supervisor+ · API: requireUploader
+    'nav-reports': SUPERVISOR_UP,        // reports are for supervisors and admins
+    'nav-manual-entry': ADMIN_UP,     // page: admin+     · API: requireAdmin
     'nav-audit': CREATOR,             // API: requireSystemCreator
     'nav-themes': CREATOR,            // API: requireSystemCreator
-    'nav-permissions': CREATOR,       // API: requireSystemCreator
   };
   Object.entries(NAV_ACCESS).forEach(([id, allowed]) => {
     const el = document.getElementById(id);
     if (el) el.style.display = allowed ? 'inline-flex' : 'none';
   });
-
-  // The Permissions nav link isn't hand-authored into every page's markup
-  // (that would mean editing a dozen HTML files); inject it once, right
-  // after Themes, on any page that already has that link.
-  if (CREATOR && !document.getElementById('nav-permissions')) {
-    const themesLink = document.getElementById('nav-themes');
-    if (themesLink) {
-      const a = document.createElement('a');
-      a.className = 'nav-item';
-      a.id = 'nav-permissions';
-      a.href = '/permissions.html';
-      a.innerHTML = '<span class="nav-icon"><svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10Z"></path><path d="m9 12 2 2 4-4"></path></svg></span><span>الصلاحيات</span>';
-      const active = (window.location.pathname.split('/').pop() || '') === 'permissions.html';
-      a.classList.toggle('active', active);
-      a.setAttribute('aria-current', active ? 'page' : 'false');
-      themesLink.after(a);
-    }
-  }
 
   // Fallback for any nav item that carries only a data-nav-role attribute
   // (some pages' markup labels the same link differently, e.g. manual entry is
