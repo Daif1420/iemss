@@ -152,10 +152,39 @@ router.post('/import-master', requireAuth, requireUploader, async (req, res) => 
         return PRIMARY_SHIFTS.has(v) ? v : 'Other';
       };
 
+      // Employees that were created without a real ID (e.g. from the leavers
+      // sheet, ID=0) hold a temporary ID >= 900000. When a later sheet lists the
+      // same person with a real ID, we move that employee to the real ID instead
+      // of creating a duplicate and archiving the old record.
+      const PLACEHOLDER_MIN_ID = 900000;
+      const placeholderByName = new Map(); // nameKey -> employee, or null if ambiguous
+      const realNames = new Set();
+      for (const e of allEmployeesForLookup) {
+        if (e.role !== 'employee') continue;
+        const k = nameKey(e.name);
+        if (!k) continue;
+        if (Number(e.id) >= PLACEHOLDER_MIN_ID) placeholderByName.set(k, placeholderByName.has(k) ? null : e);
+        else realNames.add(k);
+      }
+      const idRemaps = []; // {oldId, newId}
+
       for (const emp of rows) {
         if (!emp.id || emp.id === 0 || !emp.name) { skipped++; continue; }
 
-        const existing = emp.generatedId ? byName.get(nameKey(emp.name)) : byId.get(emp.id);
+        let existing = emp.generatedId ? byName.get(nameKey(emp.name)) : byId.get(emp.id);
+        if (!existing && !emp.generatedId && Number(emp.id) < PLACEHOLDER_MIN_ID) {
+          const k = nameKey(emp.name);
+          const cand = placeholderByName.get(k);
+          if (cand && !realNames.has(k) && byId.get(cand.id) === cand) {
+            idRemaps.push({ oldId: cand.id, newId: emp.id });
+            placeholderByName.delete(k);
+            byId.delete(cand.id);
+            const moved = { ...cand, id: emp.id };
+            byId.set(emp.id, moved);
+            byName.set(k, moved);
+            existing = moved;
+          }
+        }
         if (existing && emp.generatedId) emp.id = existing.id;
         // Rows without a real ID get a temporary ID (900000+). That temp ID can
         // already belong to a different employee created by an earlier import,
@@ -233,6 +262,22 @@ router.post('/import-master', requireAuth, requireUploader, async (req, res) => 
           toUpdate.push({ id: emp.id, emp_num: emp.emp_num || emp.id, name: emp.name, education: emp.education, residence: emp.residence, company: emp.company, shift: profileShift, target_shift: targetShift, department: emp.department });
           updated++;
           updatedEmployees.push({ id: emp.id, name: emp.name });
+        }
+      }
+
+      // Re-key placeholder employees to their real ID (status, left_date and
+      // departure_reason are kept, and every related record moves with them).
+      if (idRemaps.length) {
+        const colRows = (await db.query(
+          "SELECT column_name FROM information_schema.columns WHERE table_schema = current_schema() AND table_name = 'employees' ORDER BY ordinal_position"
+        )).rows.map(r => r.column_name);
+        const colList = colRows.map(c => `"${c}"`).join(', ');
+        const selList = colRows.map(c => c === 'id' ? '$2::int' : `"${c}"`).join(', ');
+        const childTables = ['employee_summary', 'employee_monthly_summary', 'stage_daily', 'employee_stage_targets', 'supervisor_targets', 'employee_shift_profiles', 'login_audit'];
+        for (const { oldId, newId } of idRemaps) {
+          await db.query(`INSERT INTO employees (${colList}) SELECT ${selList} FROM employees WHERE id = $1`, [oldId, newId]);
+          for (const t of childTables) await db.query(`UPDATE ${t} SET employee_id = $2 WHERE employee_id = $1`, [oldId, newId]);
+          await db.query('DELETE FROM employees WHERE id = $1', [oldId]);
         }
       }
 
@@ -570,7 +615,7 @@ router.post('/import-master', requireAuth, requireUploader, async (req, res) => 
     // CURRENT shift matches one of the shift values found in this import;
     // employees on other shifts are left completely untouched.
     try {
-      const allEmployeesNow2 = (await db.prepare("SELECT id, name, shift FROM employees WHERE role = 'employee'").all());
+      const allEmployeesNow2 = (await db.prepare("SELECT id, name, shift, status FROM employees WHERE role = 'employee'").all());
       const empIdSet = new Set(allEmployeesNow2.map(e => e.id));
       const nameIndex2 = new Map();
       for (const e of allEmployeesNow2) nameIndex2.set(normalizeArabicName(e.name), e.id);
@@ -591,8 +636,13 @@ router.post('/import-master', requireAuth, requireUploader, async (req, res) => 
       // groups with ONE bulk UPDATE each instead of one UPDATE per employee.
       const activeIds = [], leftIds = [], archiveIds = [];
       for (const e of allEmployeesNow2) {
-        if (masterIds.has(e.id)) activeIds.push(e.id);
-        else if (leaverIds.has(e.id)) leftIds.push(e.id);
+        // Listed in this upload's leavers sheet -> left (even if a stale block
+        // for them is still in Master).
+        if (leaverIds.has(e.id)) leftIds.push(e.id);
+        else if (masterIds.has(e.id)) activeIds.push(e.id);
+        // Someone already marked as left is history: a later upload that simply
+        // doesn't mention them must never move them to the archive.
+        else if (e.status === 'left') { /* keep as left */ }
         else if (importShifts.has(e.shift)) archiveIds.push(e.id);
         // else: different shift, not covered by this file -> leave untouched.
       }
