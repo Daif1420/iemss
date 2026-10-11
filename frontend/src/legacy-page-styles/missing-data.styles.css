@@ -1,0 +1,40 @@
+.md-panel{padding:20px;margin-bottom:18px}
+.md-card-head h2{margin:0 0 4px;font-size:17px}
+.md-card-head p{margin:0 0 14px;color:var(--muted);font-size:12.5px}
+.md-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(210px,1fr));gap:14px;margin-bottom:14px}
+.md-panel .field{display:flex;flex-direction:column;gap:5px}
+.md-panel .field label{font-size:11px;color:var(--muted);font-weight:800}
+.md-panel input,.md-panel select,.md-panel textarea{padding:10px 12px;border-radius:10px;border:1px solid var(--line);background:var(--soft);color:var(--text);font:600 13px Cairo,sans-serif;width:100%;box-sizing:border-box}
+.md-panel input[readonly]{opacity:.75}
+.md-panel textarea{resize:vertical}
+.md-panel input:focus,.md-panel select:focus,.md-panel textarea:focus{outline:none;border-color:var(--primary)}
+.md-reasons{display:flex;flex-wrap:wrap;gap:10px;margin:4px 0 14px}
+.md-reasons label{display:flex;align-items:center;gap:8px;padding:10px 14px;border:1px solid var(--line);border-radius:11px;background:var(--panel);cursor:pointer;font-size:12.5px;font-weight:800}
+.md-reasons label:has(input:checked){border-color:var(--primary);background:color-mix(in srgb,var(--primary) 8%,var(--panel))}
+.md-reasons input{width:auto;margin:0}
+.md-hint{padding:11px 14px;border-radius:11px;font-size:12.5px;font-weight:700;line-height:1.7;margin:0 0 12px;border:1px solid var(--line);background:var(--soft)}
+.md-hint.warn{border-color:#e0a100;background:color-mix(in srgb,#e0a100 12%,var(--panel))}
+.md-hint.info{border-color:var(--primary)}
+.md-error{color:var(--danger);font-size:12.5px;font-weight:800;min-height:18px;margin-bottom:8px}
+.md-actions{display:flex;justify-content:flex-end}
+.md-actions button:disabled{opacity:.55;cursor:not-allowed}
+.md-list-head{display:flex;justify-content:space-between;align-items:center;gap:12px;flex-wrap:wrap}
+.md-list-head h2{margin:0}
+.md-tabs{display:flex;gap:6px;flex-wrap:wrap}
+.md-tabs button{padding:7px 13px;border-radius:10px;border:1px solid var(--line);background:var(--panel);color:var(--muted);font:800 12px Cairo,sans-serif;cursor:pointer}
+.md-tabs button.active{border-color:var(--primary);color:var(--primary);background:color-mix(in srgb,var(--primary) 8%,var(--panel))}
+.md-tabs button b{margin-inline-start:6px;font-weight:900}
+.md-badge{display:inline-block;padding:3px 10px;border-radius:99px;font-size:11px;font-weight:900;border:1px solid var(--line)}
+.md-badge.pending{color:#b37d00;border-color:#e0a100;background:color-mix(in srgb,#e0a100 12%,transparent)}
+.md-badge.approved{color:var(--success);border-color:var(--success);background:color-mix(in srgb,var(--success) 10%,transparent)}
+.md-badge.rejected{color:var(--danger);border-color:var(--danger);background:color-mix(in srgb,var(--danger) 10%,transparent)}
+.md-badge.cancelled{color:var(--muted)}
+.md-table td{vertical-align:middle}
+.md-sub{display:block;font-size:11px;color:var(--muted);font-weight:700;margin-top:2px}
+.md-row-actions{display:flex;gap:6px;flex-wrap:wrap}
+.md-row-actions button{padding:6px 12px;border-radius:9px;border:1px solid var(--line);background:var(--panel);font:800 11.5px Cairo,sans-serif;cursor:pointer;color:var(--text)}
+.md-row-actions .ok:hover{border-color:var(--success);color:var(--success)}
+.md-row-actions .no:hover,.md-row-actions .cancel:hover{border-color:var(--danger);color:var(--danger)}
+.md-row-actions button:disabled{opacity:.5;cursor:wait}
+.md-danger{background:var(--danger)!important;border-color:var(--danger)!important}
+.md-notes{margin-bottom:14px}

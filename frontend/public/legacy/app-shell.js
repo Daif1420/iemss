@@ -251,3 +251,97 @@
   new MutationObserver(scan).observe(document.body, { childList:true, subtree:true });
   window.addEventListener('iems:tables-updated', scan);
 })();
+
+
+// ---- Missing-data nav link + real notifications bell ----
+(() => {
+  let user = null;
+  try { user = JSON.parse(sessionStorage.getItem('iems_user') || 'null'); } catch (_) {}
+  const token = sessionStorage.getItem('iems_token');
+  if (!user || !token) return;
+  const headers = { Authorization: 'Bearer ' + token, 'Content-Type': 'application/json' };
+  const api = async (url, opt = {}) => {
+    const r = await fetch(url, { ...opt, headers: { ...headers, ...(opt.headers || {}) } });
+    const d = await r.json().catch(() => ({}));
+    if (!r.ok) throw Error(d.error || 'حدث خطأ');
+    return d;
+  };
+  const esc = v => String(v ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+  const isReviewer = ['supervisor', 'admin', 'system_creator'].includes(user.role);
+
+  // 1) Nav link (all roles). Employees submit requests, supervisors review them.
+  const nav = document.querySelector('.main-nav');
+  if (nav && !document.getElementById('nav-missing')) {
+    const a = document.createElement('a');
+    a.className = 'nav-item'; a.id = 'nav-missing'; a.href = '/missing-data.html';
+    a.style.display = 'inline-flex';
+    a.innerHTML = '<span class="nav-icon"><svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 11l3 3L22 4"></path><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"></path></svg></span><span>طلبات البيانات</span><i class="nav-count" id="nav-missing-count" style="display:none"></i>';
+    nav.appendChild(a);
+    const here = location.pathname.split('/').pop();
+    if (here === 'missing-data.html') { a.classList.add('active'); a.setAttribute('aria-current', 'page'); }
+  }
+
+  // 2) Bell
+  const bell = document.getElementById('notifications-btn');
+  if (!bell || bell.dataset.live === '1') return;
+  bell.dataset.live = '1';
+  const wrap = document.createElement('div');
+  wrap.className = 'notif-wrap';
+  bell.parentNode.insertBefore(wrap, bell);
+  wrap.appendChild(bell);
+  const badge = bell.querySelector('i') || bell.appendChild(document.createElement('i'));
+  badge.style.display = 'none';
+  const panel = document.createElement('div');
+  panel.className = 'notif-panel'; panel.setAttribute('role', 'menu');
+  panel.innerHTML = '<div class="notif-head"><strong>الإشعارات</strong><button type="button" class="notif-readall">تحديد الكل كمقروء</button></div><div class="notif-list"><div class="notif-empty">جارٍ التحميل...</div></div>';
+  wrap.appendChild(panel);
+  const list = panel.querySelector('.notif-list');
+
+  const ago = iso => {
+    const s = Math.max(0, (Date.now() - new Date(iso).getTime()) / 1000);
+    if (s < 60) return 'الآن';
+    if (s < 3600) return Math.floor(s / 60) + ' د';
+    if (s < 86400) return Math.floor(s / 3600) + ' س';
+    return Math.floor(s / 86400) + ' يوم';
+  };
+  const setBadge = n => { badge.textContent = n > 99 ? '99+' : String(n); badge.style.display = n > 0 ? '' : 'none'; };
+  let items = [];
+  function paint() {
+    list.innerHTML = items.length ? items.map(n => `<button type="button" class="notif-item ${n.is_read ? '' : 'unread'}" data-id="${n.id}" data-link="${esc(n.link || '')}"><span class="notif-title">${esc(n.title)}</span>${n.body ? `<span class="notif-body">${esc(n.body)}</span>` : ''}<span class="notif-time">${ago(n.created_at)}</span></button>`).join('') : '<div class="notif-empty">لا توجد إشعارات.</div>';
+  }
+  async function load() {
+    try {
+      const d = await api('/api/notifications');
+      items = d.items || []; setBadge(d.unread || 0); paint();
+    } catch (_) { /* keep the previous state; try again on the next tick */ }
+    if (isReviewer) {
+      try {
+        const c = await api('/api/missing/pending-count');
+        const el = document.getElementById('nav-missing-count');
+        if (el) { el.textContent = c.pending > 99 ? '99+' : String(c.pending); el.style.display = c.pending > 0 ? '' : 'none'; }
+      } catch (_) {}
+    }
+  }
+  function placePanel() {
+    panel.style.right = '0'; panel.style.left = 'auto';
+    const r = panel.getBoundingClientRect();
+    if (r.left < 8) { panel.style.right = 'auto'; panel.style.left = '0'; }
+    const r2 = panel.getBoundingClientRect();
+    if (r2.right > window.innerWidth - 8) { panel.style.left = 'auto'; panel.style.right = '0'; }
+  }
+  bell.addEventListener('click', e => { e.stopPropagation(); const open = panel.classList.toggle('open'); if (open) { placePanel(); load(); } });
+  document.addEventListener('click', e => { if (!wrap.contains(e.target)) panel.classList.remove('open'); });
+  panel.querySelector('.notif-readall').addEventListener('click', async () => {
+    try { await api('/api/notifications/read-all', { method: 'POST' }); items.forEach(n => n.is_read = true); setBadge(0); paint(); } catch (_) {}
+  });
+  list.addEventListener('click', async e => {
+    const b = e.target.closest('.notif-item'); if (!b) return;
+    try { await api('/api/notifications/' + encodeURIComponent(b.dataset.id) + '/read', { method: 'POST' }); } catch (_) {}
+    const link = b.dataset.link;
+    if (link && link !== location.pathname) location.href = link; else { panel.classList.remove('open'); load(); }
+  });
+  load();
+  setInterval(() => { if (!document.hidden) load(); }, 45000);
+  document.addEventListener('visibilitychange', () => { if (!document.hidden) load(); });
+  window.__iemsRefreshNotifications = load;
+})();

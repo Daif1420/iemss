@@ -1206,3 +1206,20 @@ html[dir="ltr"] :is(.table-wrap,.me-grid-wrap,.absence-table-wrap,.modern-table-
 }
 /* every table box scrolls on its own so the sticky header works everywhere */
 .me-grid-wrap,.absence-table-wrap{max-height:min(72vh,680px)}
+
+/* ---- Notifications bell dropdown + nav counter ---- */
+.notif-wrap{position:relative;display:inline-flex}
+.notif-panel{display:none;position:absolute;top:calc(100% + 10px);right:0;left:auto;width:340px;max-width:90vw;background:var(--panel);border:1px solid var(--line);border-radius:14px;box-shadow:var(--shadow);z-index:80;overflow:hidden}
+.notif-panel.open{display:block}
+.notif-head{display:flex;align-items:center;justify-content:space-between;gap:10px;padding:12px 14px;border-bottom:1px solid var(--line);font-size:13px}
+.notif-readall{background:none;border:0;color:var(--primary);font:800 11px Cairo,sans-serif;cursor:pointer}
+.notif-list{max-height:380px;overflow:auto}
+.notif-item{display:flex;flex-direction:column;gap:3px;width:100%;text-align:start;padding:11px 14px;border:0;border-bottom:1px solid var(--line);background:transparent;color:var(--text);cursor:pointer;font-family:inherit}
+.notif-item:hover{background:var(--soft)}
+.notif-item.unread{background:color-mix(in srgb,var(--primary) 8%,transparent)}
+.notif-item.unread .notif-title::before{content:"";display:inline-block;width:7px;height:7px;border-radius:50%;background:var(--primary);margin-inline-end:6px}
+.notif-title{font-size:12.5px;font-weight:900}
+.notif-body{font-size:11.5px;color:var(--muted);line-height:1.6}
+.notif-time{font-size:10px;color:var(--muted)}
+.notif-empty{padding:26px 14px;text-align:center;color:var(--muted);font-size:12px}
+.nav-item .nav-count{min-width:17px;height:17px;padding:0 5px;border-radius:99px;background:var(--danger);color:#fff;font:800 9px/17px Cairo,sans-serif;font-style:normal;text-align:center;margin-inline-start:6px}
