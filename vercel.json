@@ -23,6 +23,7 @@
     { "source": "/employees-current.html", "destination": "/index.html" },
     { "source": "/employees-left.html", "destination": "/index.html" },
     { "source": "/employees-new.html", "destination": "/index.html" },
-    { "source": "/employee.html", "destination": "/index.html" }
+    { "source": "/employee.html", "destination": "/index.html" },
+    { "source": "/missing-data.html", "destination": "/index.html" }
   ]
 }
