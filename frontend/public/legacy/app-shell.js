@@ -156,7 +156,7 @@
   const SUPERVISOR_UP = ADMIN_UP || role === 'supervisor';
 
   const NAV_ACCESS = {
-    'nav-home': !!role && role !== 'employee',
+    'nav-home': !!role,               // every signed-in role (employees get their own home view)
     'nav-employees': SUPERVISOR_UP,   // page: supervisor+ · API: requireSupervisor
     'nav-import': SUPERVISOR_UP,      // page: supervisor+ · API: requireUploader
     'nav-reports': SUPERVISOR_UP,        // reports are for supervisors and admins
@@ -275,7 +275,7 @@
     const a = document.createElement('a');
     a.className = 'nav-item'; a.id = 'nav-missing'; a.href = '/missing-data.html';
     a.style.display = 'inline-flex';
-    a.innerHTML = '<span class="nav-icon"><svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 11l3 3L22 4"></path><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"></path></svg></span><span>طلبات البيانات</span><i class="nav-count" id="nav-missing-count" style="display:none"></i>';
+    a.innerHTML = '<span class="nav-icon"><svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect width="8" height="4" x="8" y="2" rx="1" ry="1"></rect><path d="M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2"></path><path d="M12 11h4"></path><path d="M12 16h4"></path><path d="M8 11h.01"></path><path d="M8 16h.01"></path></svg></span><span>الطلبات</span><i class="nav-count" id="nav-missing-count" style="display:none"></i>';
     nav.appendChild(a);
     const here = location.pathname.split('/').pop();
     if (here === 'missing-data.html') { a.classList.add('active'); a.setAttribute('aria-current', 'page'); }

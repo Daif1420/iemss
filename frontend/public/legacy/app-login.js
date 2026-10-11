@@ -166,3 +166,40 @@ if (passwordToggle && passInput) {
     passwordToggle.setAttribute('aria-label', hidden ? 'إخفاء كلمة المرور' : 'إظهار كلمة المرور');
   });
 }
+
+
+// ---- Forgot password: collect name + ID, then hand the request to the admin on WhatsApp ----
+(() => {
+  const WHATSAPP_NUMBER = '201099843057'; // admin's WhatsApp (international format, no +)
+  const link = document.getElementById('forgot-link');
+  const modal = document.getElementById('forgot-modal');
+  if (!link || !modal) return;
+  const nameIn = document.getElementById('forgot-name');
+  const idIn = document.getElementById('forgot-id');
+  const err = document.getElementById('forgot-error');
+  const open = () => {
+    err.style.display = 'none';
+    // Pre-fill the ID if the person already typed it in the login form.
+    const typed = (document.getElementById('login-id') || {}).value || '';
+    if (typed && !idIn.value) idIn.value = typed.trim();
+    modal.classList.add('open'); modal.setAttribute('aria-hidden', 'false');
+    setTimeout(() => (nameIn.value ? idIn : nameIn).focus(), 30);
+  };
+  const close = () => { modal.classList.remove('open'); modal.setAttribute('aria-hidden', 'true'); };
+  link.addEventListener('click', e => { e.preventDefault(); open(); });
+  document.getElementById('forgot-close').addEventListener('click', close);
+  document.getElementById('forgot-cancel').addEventListener('click', close);
+  modal.addEventListener('click', e => { if (e.target === modal) close(); });
+  document.addEventListener('keydown', e => { if (e.key === 'Escape' && modal.classList.contains('open')) close(); });
+  const send = () => {
+    const name = nameIn.value.trim();
+    const id = idIn.value.trim();
+    if (!name || !id) { err.textContent = 'من فضلك اكتب الاسم والـID.'; err.style.display = 'block'; return; }
+    if (!/^\d+$/.test(id)) { err.textContent = 'الـID يجب أن يكون أرقامًا فقط.'; err.style.display = 'block'; return; }
+    const text = `طلب إعادة تعيين كلمة المرور\nالاسم: ${name}\nالـID: ${id}\nنسيت كلمة المرور وأرجو مساعدتي.`;
+    window.open(`https://wa.me/${WHATSAPP_NUMBER}?text=${encodeURIComponent(text)}`, '_blank', 'noopener');
+    close();
+  };
+  document.getElementById('forgot-send').addEventListener('click', send);
+  [nameIn, idIn].forEach(i => i.addEventListener('keydown', e => { if (e.key === 'Enter') send(); }));
+})();

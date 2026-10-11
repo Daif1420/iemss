@@ -22,31 +22,114 @@
   </div>
 </header>
 <main class="container">
-  <div class="hero"><div><span class="eyebrow" id="md-eyebrow">Missing Data</span><h1 id="md-title">طلبات استكمال البيانات</h1><p id="md-desc">—</p></div></div>
+  <div class="hero"><div><span class="eyebrow" id="md-eyebrow">Requests</span><h1 id="md-title">الطلبات</h1><p id="md-desc">—</p></div></div>
 
-  <!-- Employee: request form -->
-  <section class="panel md-panel" id="md-employee" style="display:none">
-    <div class="md-card-head"><h2>طلب استكمال بيانات يوم</h2><p>اختر اليوم والمرحلة والكمية التي نفذتها فعلًا. لن تتغير بياناتك إلا بعد اعتماد المشرف.</p></div>
-    <div class="md-grid">
-      <div class="field"><label>اسم الموظف</label><input id="md-name" type="text" readonly></div>
-      <div class="field"><label>الكود الوظيفي</label><input id="md-code" type="text" readonly></div>
-      <div class="field"><label for="md-date">التاريخ المطلوب استكماله</label><input id="md-date" type="date"></div>
-      <div class="field"><label for="md-stage">المرحلة (Classification)</label><select id="md-stage"><option value="">اختر المرحلة</option></select></div>
-      <div class="field"><label for="md-qty">الكمية الفعلية المنفذة</label><input id="md-qty" type="number" min="0" step="any" inputmode="decimal" placeholder="0"></div>
+  <!-- Employee: choose a request type, then fill its form -->
+  <div id="md-employee" style="display:none">
+    <div class="rq-types" id="rq-types" role="tablist" aria-label="نوع الطلب">
+      <button class="rq-type active" type="button" data-type="missing" role="tab">
+        <span class="rq-ico tone-blue"><svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 22h6a2 2 0 0 0 2-2V7l-5-5H6a2 2 0 0 0-2 2v10"></path><path d="M14 2v4a2 2 0 0 0 2 2h4"></path><path d="M10.4 12.6a2 2 0 1 1 3 3L8 21l-4 1 1-4Z"></path></svg></span>
+        <span class="rq-type-text"><b>استكمال بيانات</b><small>تسجيل أو تصحيح يوم ناقص</small></span>
+      </button>
+      <button class="rq-type" type="button" data-type="leave" role="tab">
+        <span class="rq-ico tone-green"><svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M8 2v4"></path><path d="M16 2v4"></path><rect width="18" height="18" x="3" y="4" rx="2"></rect><path d="M3 10h18"></path><path d="M8 14h.01"></path><path d="M12 14h.01"></path><path d="M16 14h.01"></path><path d="M8 18h.01"></path><path d="M12 18h.01"></path></svg></span>
+        <span class="rq-type-text"><b>طلب إجازة</b><small>اعتيادية، عارضة، مرضية</small></span>
+      </button>
+      <button class="rq-type" type="button" data-type="advance" role="tab">
+        <span class="rq-ico tone-amber"><svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect width="20" height="12" x="2" y="6" rx="2"></rect><circle cx="12" cy="12" r="2"></circle><path d="M6 12h.01M18 12h.01"></path></svg></span>
+        <span class="rq-type-text"><b>طلب سلفة</b><small>مبلغ مقدّم من المرتب</small></span>
+      </button>
     </div>
-    <div class="md-reasons" id="md-reasons" role="radiogroup" aria-label="سبب الطلب"></div>
-    <div class="field md-notes"><label for="md-notes">ملاحظات إضافية</label><textarea id="md-notes" rows="3" maxlength="1000" placeholder="اختياري"></textarea></div>
-    <div class="md-hint" id="md-hint" style="display:none"></div>
-    <div class="md-error" id="md-error"></div>
-    <div class="md-actions"><button class="primary-btn" id="md-submit" type="button">إرسال الطلب</button></div>
-  </section>
 
-  <section class="panel md-panel" id="md-list-panel">
-    <div class="md-card-head md-list-head">
+    <!-- 1) Missing / wrong data -->
+    <section class="rq-form active" id="rq-panel-missing">
+      <header class="rq-form-head">
+        <span class="rq-ico tone-blue"><svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 22h6a2 2 0 0 0 2-2V7l-5-5H6a2 2 0 0 0-2 2v10"></path><path d="M14 2v4a2 2 0 0 0 2 2h4"></path><path d="M10.4 12.6a2 2 0 1 1 3 3L8 21l-4 1 1-4Z"></path></svg></span>
+        <div><h2>طلب استكمال بيانات يوم</h2><p>لن تتغير بياناتك إلا بعد اعتماد المشرف.</p></div>
+        <div class="rq-who"><span class="rq-who-avatar" id="md-avatar">؟</span><div><b id="md-name">—</b><small>الكود الوظيفي <span id="md-code">—</span></small></div></div>
+      </header>
+      <div class="rq-body">
+        <div class="rq-step"><span class="rq-step-n">1</span><div class="rq-step-main">
+          <h3>اليوم والمرحلة</h3>
+          <div class="rq-grid">
+            <div class="rq-field"><label for="md-date">التاريخ المطلوب استكماله</label><input id="md-date" type="date"></div>
+            <div class="rq-field"><label for="md-stage">المرحلة (Classification)</label><select id="md-stage"><option value="">اختر المرحلة</option></select></div>
+          </div>
+        </div></div>
+        <div class="rq-step"><span class="rq-step-n">2</span><div class="rq-step-main">
+          <h3>سبب الطلب</h3>
+          <div class="rq-choice" id="md-reasons" role="radiogroup" aria-label="سبب الطلب"></div>
+        </div></div>
+        <div class="rq-step"><span class="rq-step-n">3</span><div class="rq-step-main">
+          <h3>الكمية والملاحظات</h3>
+          <div class="rq-grid">
+            <div class="rq-field"><label for="md-qty">الكمية الفعلية المنفذة</label><input id="md-qty" type="number" min="0" step="any" inputmode="decimal" placeholder="0"></div>
+            <div class="rq-field rq-wide"><label for="md-notes">ملاحظات إضافية <em>(اختياري)</em></label><textarea id="md-notes" rows="2" maxlength="1000" placeholder="أي تفاصيل تساعد المشرف"></textarea></div>
+          </div>
+        </div></div>
+        <div class="md-hint" id="md-hint" style="display:none"></div>
+      </div>
+      <footer class="rq-foot"><span class="rq-msg err" id="md-error"></span><button class="rq-submit" id="md-submit" type="button">إرسال الطلب</button></footer>
+    </section>
+
+    <!-- 2) Leave -->
+    <section class="rq-form" id="rq-panel-leave">
+      <header class="rq-form-head">
+        <span class="rq-ico tone-green"><svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M8 2v4"></path><path d="M16 2v4"></path><rect width="18" height="18" x="3" y="4" rx="2"></rect><path d="M3 10h18"></path><path d="M8 14h.01"></path><path d="M12 14h.01"></path><path d="M16 14h.01"></path><path d="M8 18h.01"></path><path d="M12 18h.01"></path></svg></span>
+        <div><h2>طلب إجازة</h2><p>حدّد نوع الإجازة والفترة.</p></div>
+      </header>
+      <div class="rq-body">
+        <div class="rq-step"><span class="rq-step-n">1</span><div class="rq-step-main">
+          <h3>نوع الإجازة</h3>
+          <div class="rq-choice" id="lv-types" role="radiogroup" aria-label="نوع الإجازة"></div>
+        </div></div>
+        <div class="rq-step"><span class="rq-step-n">2</span><div class="rq-step-main">
+          <h3>الفترة</h3>
+          <div class="rq-range">
+            <div class="rq-field"><label for="lv-start">من تاريخ</label><input id="lv-start" type="date"></div>
+            <span class="rq-range-arrow">←</span>
+            <div class="rq-field"><label for="lv-end">إلى تاريخ</label><input id="lv-end" type="date"></div>
+            <div class="rq-days" id="lv-days"><b>—</b><small>يوم</small></div>
+          </div>
+        </div></div>
+        <div class="rq-step"><span class="rq-step-n">3</span><div class="rq-step-main">
+          <h3>ملاحظات</h3>
+          <div class="rq-field"><textarea id="lv-notes" rows="2" maxlength="1000" placeholder="اختياري"></textarea></div>
+        </div></div>
+      </div>
+      <footer class="rq-foot"><span class="rq-msg err" id="lv-error"></span><button class="rq-submit" id="lv-submit" type="button">إرسال الطلب</button></footer>
+    </section>
+
+    <!-- 3) Advance -->
+    <section class="rq-form" id="rq-panel-advance">
+      <header class="rq-form-head">
+        <span class="rq-ico tone-amber"><svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect width="20" height="12" x="2" y="6" rx="2"></rect><circle cx="12" cy="12" r="2"></circle><path d="M6 12h.01M18 12h.01"></path></svg></span>
+        <div><h2>طلب سلفة</h2><p>اكتب المبلغ المطلوب وسببه.</p></div>
+      </header>
+      <div class="rq-body">
+        <div class="rq-step"><span class="rq-step-n">1</span><div class="rq-step-main">
+          <h3>المبلغ المطلوب</h3>
+          <div class="rq-amount"><input id="ad-amount" type="number" min="1" step="any" inputmode="decimal" placeholder="0"><span>جنيه</span></div>
+          <div class="rq-chips" id="ad-chips"><button type="button" data-amt="500">500</button><button type="button" data-amt="1000">1000</button><button type="button" data-amt="2000">2000</button><button type="button" data-amt="3000">3000</button></div>
+        </div></div>
+        <div class="rq-step"><span class="rq-step-n">2</span><div class="rq-step-main">
+          <h3>سبب السلفة</h3>
+          <div class="rq-field"><textarea id="ad-notes" rows="3" maxlength="1000" placeholder="اكتب سبب طلب السلفة"></textarea></div>
+        </div></div>
+      </div>
+      <footer class="rq-foot"><span class="rq-msg err" id="ad-error"></span><button class="rq-submit" id="ad-submit" type="button">إرسال الطلب</button></footer>
+    </section>
+  </div>
+
+  <!-- List: employee's own requests (cards) / reviewer's queue (table) -->
+  <section class="rq-list" id="md-list-panel">
+    <div class="rq-list-head">
       <h2 id="md-list-title">الطلبات</h2>
-      <div class="md-tabs" id="md-tabs" style="display:none"></div>
+      <div class="md-tabs" id="md-kinds" style="display:none"></div>
     </div>
-    <div class="table-wrap"><table class="emp-mgmt-table md-table"><thead id="md-thead"></thead><tbody id="md-tbody"></tbody></table></div>
+    <div class="md-tabs md-status-tabs" id="md-tabs" style="display:none"></div>
+    <div class="rq-cards" id="rq-cards" style="display:none"></div>
+    <div class="table-wrap" id="md-table-wrap"><table class="emp-mgmt-table md-table"><thead id="md-thead"></thead><tbody id="md-tbody"></tbody></table></div>
   </section>
 
   <div class="departure-modal" id="md-reject-modal" aria-hidden="true">

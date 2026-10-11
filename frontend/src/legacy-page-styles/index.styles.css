@@ -158,3 +158,18 @@ html[data-theme="dark"] .visual-side:before{
 .visual-side .node,
 .visual-side .connection{display:none}
 .visual-side .visual-content{z-index:1}
+
+/* Forgot-password dialog */
+#forgot-link{cursor:pointer}
+.forgot-modal{position:fixed;inset:0;z-index:1000;display:none;align-items:center;justify-content:center;padding:18px;background:rgba(3,20,45,.55);backdrop-filter:blur(3px)}
+.forgot-modal.open{display:flex}
+.forgot-card{width:100%;max-width:420px;display:flex;flex-direction:column;gap:16px;padding:26px;border-radius:18px;background:var(--panel);border:1px solid var(--line);box-shadow:0 26px 70px rgba(1,20,48,.35);direction:rtl}
+.forgot-head{display:flex;justify-content:space-between;align-items:flex-start;gap:12px}
+.forgot-head h2{font-size:19px;font-weight:900;margin:0 0 4px;color:var(--text)}
+.forgot-head p{font-size:12.5px;line-height:1.7;color:var(--muted);margin:0}
+.forgot-close{width:36px;height:36px;flex:0 0 36px;border:1px solid var(--line);border-radius:10px;background:var(--surface);color:var(--muted);font-size:20px;line-height:1;cursor:pointer}
+.forgot-close:hover{border-color:var(--primary);color:var(--primary)}
+.forgot-actions{display:flex;gap:10px}
+.forgot-actions .forgot-send{flex:1}
+.forgot-cancel{padding:0 18px;height:52px;border-radius:10px;border:1px solid var(--line);background:var(--surface);color:var(--muted);font:800 13px Cairo,sans-serif;cursor:pointer}
+.forgot-cancel:hover{border-color:var(--primary);color:var(--primary)}
