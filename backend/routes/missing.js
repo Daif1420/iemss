@@ -229,7 +229,7 @@ router.post('/:id/approve', requireAuth, requireSupervisor, async (req, res) => 
        ON CONFLICT (employee_id, stage, entry_date) DO UPDATE SET value_num = excluded.value_num, value_text = NULL`,
       [r.employee_id, r.stage, String(r.entry_date).slice(0, 10), r.quantity]
     );
-    await db.query('UPDATE missing_data_requests SET old_value = $2, new_value = $3 WHERE id = $1', [r.id, oldValue, r.quantity]);
+    await db.query('UPDATE missing_data_requests SET old_value = $2, new_value = $3, old_text = $4 WHERE id = $1', [r.id, oldValue, r.quantity, before && before.text ? before.text : null]);
     return { oldValue };
   });
   const out = await tx();
@@ -238,6 +238,44 @@ router.post('/:id/approve', requireAuth, requireSupervisor, async (req, res) => 
   await writeAudit(req, 'missing_request_approve', r.id, { employee_id: r.employee_id, stage: r.stage, entry_date: day, old_value: out.oldValue, new_value: Number(r.quantity), approved_by: req.user.name || null });
   await notifyUsers([r.employee_id], { type: 'missing_approved', title: 'تم اعتماد طلبك', body: `${r.stage} — ${day} — الكمية ${fmtQty(r.quantity)}`, link: '/missing-data.html' });
   res.json({ ok: true, old_value: out.oldValue, new_value: Number(r.quantity) });
+});
+
+// Undo an approval: put the day back exactly as it was and re-open the request.
+router.post('/:id/revert', requireAuth, requireSupervisor, async (req, res) => {
+  const r = await loadForReview(req, res); if (!r) return;
+  if (r.status !== 'approved') return res.status(409).json({ error: 'يمكن التراجع عن الطلبات المعتمدة فقط.' });
+  const day = String(r.entry_date).slice(0, 10);
+  const tx = db.transaction(async () => {
+    const claimed = await db.prepare(
+      `UPDATE missing_data_requests SET status = 'pending', reviewed_by = NULL, reviewed_by_name = NULL, reviewed_at = NULL, reject_reason = NULL
+        WHERE id = ? AND status = 'approved' RETURNING id`
+    ).get(r.id);
+    if (!claimed) return { error: 'تمت مراجعة هذا الطلب بالفعل.' };
+    // Safety: if the day was changed again after this approval, do not overwrite newer data.
+    const now = await recordedValue(r.employee_id, r.stage, day);
+    if (!now || now.value === null || Number(now.value) !== Number(r.new_value)) {
+      throw Object.assign(new Error('stale'), { stale: true });
+    }
+    if (r.old_value !== null && r.old_value !== undefined) {
+      await db.query('UPDATE stage_daily SET value_num = $4, value_text = NULL WHERE employee_id = $1 AND stage = $2 AND entry_date = $3', [r.employee_id, r.stage, day, r.old_value]);
+    } else if (r.old_text) {
+      await db.query('UPDATE stage_daily SET value_num = NULL, value_text = $4 WHERE employee_id = $1 AND stage = $2 AND entry_date = $3', [r.employee_id, r.stage, day, r.old_text]);
+    } else {
+      await db.query('DELETE FROM stage_daily WHERE employee_id = $1 AND stage = $2 AND entry_date = $3', [r.employee_id, r.stage, day]);
+    }
+    await db.query('UPDATE missing_data_requests SET old_value = NULL, new_value = NULL, old_text = NULL WHERE id = $1', [r.id]);
+    return { ok: true };
+  });
+  let out;
+  try { out = await tx(); }
+  catch (e) {
+    if (e && e.stale) return res.status(409).json({ error: 'لا يمكن التراجع: قيمة اليوم تغيّرت بعد الاعتماد. عدّلها يدويًا من الإدخال اليدوي.' });
+    throw e;
+  }
+  if (out.error) return res.status(409).json({ error: out.error });
+  await writeAudit(req, 'missing_request_revert', r.id, { employee_id: r.employee_id, stage: r.stage, entry_date: day, restored_value: r.old_value ?? null, reverted_by: req.user.name || null });
+  await notifyUsers([r.employee_id], { type: 'missing_reverted', title: 'تم إلغاء اعتماد طلبك', body: `${r.stage} — ${day} — عاد الطلب قيد المراجعة`, link: '/missing-data.html' });
+  res.json({ ok: true });
 });
 
 router.post('/:id/reject', requireAuth, requireSupervisor, async (req, res) => {
@@ -255,12 +293,14 @@ router.post('/:id/reject', requireAuth, requireSupervisor, async (req, res) => {
   res.json({ ok: true });
 });
 
+// Badge on the "الطلبات" nav item: open missing-data requests + open leave/advance requests.
 router.get('/pending-count', requireAuth, requireSupervisor, async (req, res) => {
   const scope = shiftScope(req);
-  const row = scope
-    ? (await db.query("SELECT COUNT(*)::int AS c FROM missing_data_requests WHERE status = 'pending' AND COALESCE(shift,'') = ANY($1::text[])", [scope])).rows[0]
-    : (await db.query("SELECT COUNT(*)::int AS c FROM missing_data_requests WHERE status = 'pending'")).rows[0];
-  res.json({ pending: row.c });
+  const count = async table => (scope
+    ? (await db.query(`SELECT COUNT(*)::int AS c FROM ${table} WHERE status = 'pending' AND COALESCE(shift,'') = ANY($1::text[])`, [scope])).rows[0]
+    : (await db.query(`SELECT COUNT(*)::int AS c FROM ${table} WHERE status = 'pending'`)).rows[0]).c;
+  const [missing, other] = await Promise.all([count('missing_data_requests'), count('employee_requests')]);
+  res.json({ pending: missing + other, missing, other });
 });
 
 module.exports = router;

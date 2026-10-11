@@ -8,6 +8,7 @@ const adminRoutes = require('./routes/admin');
 const attendanceRoutes = require('./routes/attendance');
 const notificationRoutes = require('./routes/notifications');
 const missingRoutes = require('./routes/missing');
+const requestRoutes = require('./routes/requests');
 
 const app = express();
 app.set('trust proxy', 1);
@@ -42,6 +43,7 @@ app.use('/api/admin', adminRoutes);
 app.use('/api/attendance', attendanceRoutes);
 app.use('/api/notifications', notificationRoutes);
 app.use('/api/missing', missingRoutes);
+app.use('/api/requests', requestRoutes);
 
 // An unknown /api path used to fall through to the platform's HTML 404 page.
 // Every frontend api() helper does `await res.json()`, so that surfaced as a
