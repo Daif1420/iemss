@@ -653,7 +653,7 @@ async function loadSelfView(dashData) {
        const head = '<th>المرحلة</th>' + dates.map(d => `<th><span class="detail-date-head"><span class="detail-day">${detailWeekday(d)}</span><strong class="detail-date">${escapeHtml(d.slice(8) + '/' + d.slice(5, 7))}</strong></span></th>`).join('') + '<th>الإجمالي</th><th>التارجت الشهري</th><th>نسبة الإنجاز</th><th>النسبة الإجمالية</th>';
 
       if (!stageEntries.length && !totalTargetEntry) {
-        return `${showShiftHeading ? `<div class="shift-detail-heading"><span>تفاصيل Shift ${escapeHtml(profile.shift)}</span></div>` : ''}<div class="table-wrap"><table><thead><tr>${head}</tr></thead><tbody><tr><td colspan="${dates.length + 4}"><div class="empty-state">لا توجد بيانات مطابقة.</div></td></tr></tbody></table></div>`;
+        return `${showShiftHeading ? `<div class="shift-detail-heading"><span>تفاصيل Shift ${escapeHtml(profile.shift)}</span></div>` : ''}<div class="table-wrap"><table class="freeze-first"><thead><tr>${head}</tr></thead><tbody><tr><td colspan="${dates.length + 4}"><div class="empty-state">لا توجد بيانات مطابقة.</div></td></tr></tbody></table></div>`;
       }
 
       // النسبة الإجمالية = تُحسب من الفترة المعروضة: مجموع نسب المراحل، ونسبة كل
@@ -713,7 +713,7 @@ async function loadSelfView(dashData) {
         const merged = `<td class="detail-percentage-merged" rowspan="${stageRows.length}"><b>${coloredPercent(overallStagePercent)}</b><small>النسبة الإجمالية</small></td>`;
         stageRows[0] = stageRows[0].replace('</tr>', merged + '</tr>');
       }
-      const table = `<div class="table-wrap shift-detail-table"><table><thead><tr>${head}</tr></thead><tbody>${stageRows.join('')}</tbody></table></div>`;
+      const table = `<div class="table-wrap shift-detail-table"><table class="freeze-first"><thead><tr>${head}</tr></thead><tbody>${stageRows.join('')}</tbody></table></div>`;
 
       return `${showShiftHeading ? `<div class="shift-detail-heading"><span>تفاصيل Shift ${escapeHtml(profile.shift)}</span></div>` : ''}<div class="daily-details-wrap">${table}</div>`;
     }

@@ -107,7 +107,7 @@ async function runReport() {
 
   if (!from || !to) { showError('من فضلك اختر التاريخ من وإلى.'); return; }
   if (from > to) { showError('تاريخ "من" يجب أن يكون قبل تاريخ "إلى".'); return; }
-  if (!stages.length) { showError('اختيار المرحلة شرط أساسي لإنشاء تقرير أرقام الموظفين. بدون اختيار مرحلة ستظهر فقط قائمة Top 5 لكل المراحل.'); return; }
+  if (!stages.length) { showError('اختر مرحلة واحدة لإنشاء تقرير أرقام الموظفين. بدون اختيار مرحلة ستظهر فقط قائمة Top 5 لكل المراحل.'); return; }
 
   $('rep-run-btn').disabled = true;
   $('rep-run-btn').innerHTML = '<span class="report-spinner" aria-hidden="true"></span>';
@@ -394,4 +394,3 @@ document.querySelectorAll('[data-report-range]').forEach(b=>b.addEventListener('
 loadFilters();
 
 $('rep-shift')?.addEventListener('change', () => { const el=$('rep-shift'); const picked=[...el.selectedOptions].map(o=>o.value); if(picked.includes('__ALL__')&&picked.length>1){[...el.options].forEach(o=>o.selected=o.value==='__ALL__')} else if(picked.some(v=>v!=='__ALL__')) {[...el.options].forEach(o=>{if(o.value==='__ALL__')o.selected=false})}});
-$('rep-stage')?.addEventListener('change', () => { const el=$('rep-stage'); const picked=[...el.selectedOptions].map(o=>o.value); if(picked.includes('__ALL__')&&picked.length>1){[...el.options].forEach(o=>o.selected=o.value==='__ALL__')} else if(picked.some(v=>v!=='__ALL__')) {[...el.options].forEach(o=>{if(o.value==='__ALL__')o.selected=false})}});
