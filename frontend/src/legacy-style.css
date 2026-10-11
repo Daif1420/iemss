@@ -1155,3 +1155,21 @@ html[dir="rtl"] table.freeze-first thead th:first-child,
 html[dir="rtl"] table.freeze-first tbody td:first-child{box-shadow:6px 0 8px -6px rgba(0,0,0,.28)}
 html[dir="ltr"] table.freeze-first thead th:first-child,
 html[dir="ltr"] table.freeze-first tbody td:first-child{box-shadow:-6px 0 8px -6px rgba(0,0,0,.28)}
+
+/* Frozen stage column — the whole column (header cell, every row, total row)
+   stays pinned, and keeps the same zebra striping as the rest of the row. */
+table.freeze-first tbody tr:nth-child(even) td:first-child{
+  background:var(--tbl-row-alt,var(--panel))!important;
+}
+table.freeze-first tbody tr:nth-child(even):hover td:first-child,
+table.freeze-first tbody tr:hover td:first-child{
+  background:var(--tbl-row-hover,var(--soft))!important;
+}
+table.freeze-first tbody tr.total-target-master-row td:first-child,
+table.freeze-first tbody tr.total-target-row td:first-child{
+  background:color-mix(in srgb,var(--primary) 12%,var(--tbl-row,var(--panel)))!important;
+}
+table.freeze-first thead th:first-child{
+  background:var(--tbl-head,var(--panel2))!important;
+  color:var(--tbl-head-text,#fff)!important;
+}
