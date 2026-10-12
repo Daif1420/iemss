@@ -19,3 +19,17 @@
 .left-filter-row button:disabled{opacity:.5;cursor:not-allowed}
 #left-print-root{position:fixed;left:-99999px;top:0;width:1100px;background:#fff}
 .left-filter-row .left-filter-actions .ghost-btn{width:auto;min-width:0;height:38px;padding:0 14px;white-space:nowrap;display:inline-flex;align-items:center;justify-content:center;font-size:12px}
+
+
+/* Departure KPIs — unified with the existing IEMS theme */
+.departure-kpis{display:grid;grid-template-columns:repeat(auto-fit,minmax(185px,1fr));gap:12px;margin:0 0 20px}
+.departure-kpi{position:relative;display:flex;align-items:center;gap:13px;min-width:0;min-height:104px;padding:16px;text-align:right;color:var(--text);background:var(--panel);border:1px solid var(--line);border-radius:15px;cursor:pointer;box-shadow:0 6px 22px rgba(15,23,42,.035);transition:transform .18s,border-color .18s,background .18s}
+.departure-kpi:hover{transform:translateY(-2px);border-color:color-mix(in srgb,var(--primary) 55%,var(--line))}
+.departure-kpi.is-active{border-color:var(--primary);background:color-mix(in srgb,var(--primary) 7%,var(--panel));box-shadow:inset 0 0 0 1px color-mix(in srgb,var(--primary) 22%,transparent)}
+.departure-kpi-icon{display:grid;place-items:center;flex:0 0 42px;width:42px;height:42px;border-radius:12px;background:color-mix(in srgb,var(--primary) 12%,var(--panel));color:var(--primary);font-size:22px;font-weight:900}
+.departure-kpi-copy{display:flex;flex-direction:column;gap:2px;min-width:0}
+.departure-kpi-copy small{font-size:11px;color:var(--muted);font-weight:800;overflow-wrap:anywhere}
+.departure-kpi-copy strong{font-size:25px;line-height:1.2;font-weight:900;font-variant-numeric:tabular-nums}
+.departure-kpi-copy em{font-size:10px;font-style:normal;color:var(--muted)}
+.departure-kpi-reasons{display:contents}
+@media(max-width:650px){.departure-kpis{grid-template-columns:repeat(2,minmax(0,1fr));gap:9px}.departure-kpi{min-height:92px;padding:11px;gap:9px}.departure-kpi-icon{flex-basis:34px;width:34px;height:34px;font-size:18px}.departure-kpi-copy strong{font-size:22px}.departure-kpi-copy small{font-size:10px}}
