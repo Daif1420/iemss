@@ -55,6 +55,13 @@
   const apiBase = src => (src === 'm' ? '/api/missing' : '/api/requests');
   const byDate = (a, b) => String(b.r.created_at).localeCompare(String(a.r.created_at));
   function setBtnBusy(btn, busy) { btn.disabled = busy; }
+  function paintRequestKpis(items) {
+    if (items && !Array.isArray(items) && typeof items === 'object') { const put = (id, value) => { const el = $(id); if (el) el.textContent = Number(value || 0).toLocaleString('en-US'); }; put('request-kpi-total', Object.values(items).reduce((a,b)=>a+(Number(b)||0),0)); put('request-kpi-pending', items.pending); put('request-kpi-approved', items.approved); put('request-kpi-rejected', items.rejected); return; }
+    const statuses = { pending: 0, approved: 0, rejected: 0 };
+    (items || []).forEach(x => { if (Object.prototype.hasOwnProperty.call(statuses, x.r.status)) statuses[x.r.status] += 1; });
+    const put = (id, value) => { const el = $(id); if (el) el.textContent = Number(value || 0).toLocaleString('en-US'); };
+    put('request-kpi-total', (items || []).length); put('request-kpi-pending', statuses.pending); put('request-kpi-approved', statuses.approved); put('request-kpi-rejected', statuses.rejected);
+  }
 
   // ---------------- Employee ----------------
   async function initEmployee() {
@@ -186,6 +193,7 @@
       try {
         const [m, o] = await Promise.all([api('/api/missing/mine'), api('/api/requests/mine')]);
         const rows = [...m.requests.map(r => normalize(r, 'm')), ...o.requests.map(r => normalize(r, 'r'))].sort(byDate);
+        paintRequestKpis(rows);
         box.innerHTML = rows.map(x => {
           const [tone, svg] = ICON[x.kind];
           const parts = x.detail.split('<span class="md-sub">');
@@ -232,6 +240,7 @@
         ]);
         rows = [...m.requests.map(r => normalize(r, 'm')), ...o.requests.map(r => normalize(r, 'r'))].sort(byDate);
         counts = sumCounts(m.counts, o.counts); paintTabs();
+        paintRequestKpis(counts);
         $('md-tbody').innerHTML = rows.map(x => `<tr>
           <td>${esc(x.r.employee_name)}<span class="md-sub">ID ${esc(x.r.employee_id)}</span></td><td>${esc(x.r.shift || '—')}</td>
           <td>${kindBadge(x.kind)}</td><td>${x.detail}<span class="md-sub">قُدّم ${fdt(x.r.created_at)}</span></td>

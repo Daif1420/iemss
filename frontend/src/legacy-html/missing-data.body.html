@@ -24,6 +24,13 @@
 <main class="container">
   <div class="hero"><div><span class="eyebrow" id="md-eyebrow">Requests</span><h1 id="md-title">الطلبات</h1><p id="md-desc">—</p></div></div>
 
+  <section class="request-kpis" id="request-kpis" aria-label="ملخص الطلبات">
+    <div class="request-kpi"><span class="request-kpi-icon">▦</span><div><small>إجمالي الطلبات</small><strong id="request-kpi-total">—</strong></div></div>
+    <div class="request-kpi"><span class="request-kpi-icon pending">◷</span><div><small>قيد المراجعة</small><strong id="request-kpi-pending">—</strong></div></div>
+    <div class="request-kpi"><span class="request-kpi-icon approved">✓</span><div><small>مقبولة</small><strong id="request-kpi-approved">—</strong></div></div>
+    <div class="request-kpi"><span class="request-kpi-icon rejected">!</span><div><small>مرفوضة</small><strong id="request-kpi-rejected">—</strong></div></div>
+  </section>
+
   <!-- Employee: choose a request type, then fill its form -->
   <div id="md-employee" style="display:none">
     <div class="rq-types" id="rq-types" role="tablist" aria-label="نوع الطلب">
