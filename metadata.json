@@ -1,0 +1,6 @@
+{
+  "name": "IEMS - Intercom Employee Management System",
+  "description": "Enterprise HR and Employee Management System with unified design, corporate dashboards, advanced requests workflows, and workforce analytics.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
