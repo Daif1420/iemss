@@ -1,11 +1,29 @@
 {
-  "buildCommand": "vite build",
-  "outputDirectory": "dist",
-  "framework": "vite",
-  "rewrites": [
-    {
-      "source": "/(.*)",
-      "destination": "/index.html"
+  "$schema": "https://openapi.vercel.sh/vercel.json",
+  "buildCommand": "npm run build",
+  "outputDirectory": "frontend/dist",
+  "framework": null,
+  "functions": {
+    "api/index.js": {
+      "maxDuration": 60,
+      "memory": 1024,
+      "includeFiles": "backend/**"
     }
+  },
+  "rewrites": [
+    { "source": "/api/(.*)", "destination": "/api" },
+    { "source": "/home.html", "destination": "/index.html" },
+    { "source": "/dashboard.html", "destination": "/index.html" },
+    { "source": "/admin-employees.html", "destination": "/index.html" },
+    { "source": "/admin-import.html", "destination": "/index.html" },
+    { "source": "/admin-manual-entry.html", "destination": "/index.html" },
+    { "source": "/reports.html", "destination": "/index.html" },
+    { "source": "/audit-logs.html", "destination": "/index.html" },
+    { "source": "/themes.html", "destination": "/index.html" },
+    { "source": "/employees-current.html", "destination": "/index.html" },
+    { "source": "/employees-left.html", "destination": "/index.html" },
+    { "source": "/employees-new.html", "destination": "/index.html" },
+    { "source": "/employee.html", "destination": "/index.html" },
+    { "source": "/missing-data.html", "destination": "/index.html" }
   ]
 }
